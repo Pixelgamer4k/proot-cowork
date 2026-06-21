@@ -31,9 +31,24 @@ if [[ ! -f "$ROOTFS_DIR/start-desktop.sh" ]]; then
     exit 1
 fi
 
-# Clean apt cache to reduce size
-proot-distro login "$DISTRO" --shared-tmp -- bash -lc "apt clean && rm -rf /tmp/* /var/tmp/*" || true
+# Optional shrink: run apt clean inside guest before export.
+# Skipped by default — proot tmp/chmod errors on some Termux builds break export.
+if [[ "${CLEAN_BEFORE_EXPORT:-0}" == "1" ]]; then
+    mkdir -p "${PREFIX}/tmp"
+    echo "==> Cleaning apt cache inside guest (CLEAN_BEFORE_EXPORT=1)..."
+    set +e
+    proot-distro login "$DISTRO" --shared-tmp -- bash -lc "apt clean"
+    CLEAN_STATUS=$?
+    set -e
+    if [[ $CLEAN_STATUS -ne 0 ]]; then
+        echo "WARNING: apt clean failed (proot tmp error). Continuing export anyway."
+        echo "         To shrink later: proot-distro login ubuntu -- apt clean"
+    fi
+else
+    echo "==> Skipping apt clean (set CLEAN_BEFORE_EXPORT=1 to try)"
+fi
 
+echo "==> Creating tarball (this may take several minutes)..."
 cd "$ROOTFS_DIR"
 tar -czf "$OUTPUT" .
 

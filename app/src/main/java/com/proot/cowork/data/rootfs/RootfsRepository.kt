@@ -1,4 +1,4 @@
-package com.proot.cowork.data/rootfs
+package com.proot.cowork.data.rootfs
 
 import android.content.Context
 import android.net.Uri

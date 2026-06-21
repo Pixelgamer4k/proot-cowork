@@ -50,7 +50,17 @@ fi
 
 echo "==> Creating tarball (this may take several minutes)..."
 cd "$ROOTFS_DIR"
-tar -czf "$OUTPUT" .
+
+# Exclude virtual mounts and snapd paths that cause permission errors in proot rootfs.
+tar -czf "$OUTPUT" \
+    --exclude='./proc' \
+    --exclude='./sys' \
+    --exclude='./dev' \
+    --exclude='./run' \
+    --exclude='./tmp' \
+    --exclude='./var/lib/snapd' \
+    --exclude='./snap' \
+    .
 
 SIZE=$(du -h "$OUTPUT" | cut -f1)
 echo "==> Exported: $OUTPUT ($SIZE)"

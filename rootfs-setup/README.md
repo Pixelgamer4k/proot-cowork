@@ -81,5 +81,6 @@ When you import the tarball, the app will:
 | Large tarball | Remove apt cache: `apt clean` before export |
 | `unrecognized option: '-lc'` | proot-distro v5.3+ uses `-- bash -c` not `-e bash -lc` — pull latest scripts |
 | `proot error: can't chmod .../tmp/proot-*` | Harmless during optional apt clean — pull latest `06-export-rootfs.sh` (skips clean) or export manually with `tar` |
+| `tar: ./var/lib/snapd/void: Permission denied` | Exclude snapd and virtual mounts — use updated `06-export-rootfs.sh` or manual tar with `--exclude` flags below |
 
 See also: [docs/RESEARCH.md](../docs/RESEARCH.md) section on X11 requirements.

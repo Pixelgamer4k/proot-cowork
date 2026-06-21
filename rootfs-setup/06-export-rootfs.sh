@@ -49,10 +49,17 @@ else
 fi
 
 echo "==> Creating tarball (this may take several minutes)..."
+echo "    Excluding: proc, sys, dev, run, tmp, var/lib/snapd, snap"
+
+# Remove partial archive from a previous failed export attempt.
+rm -f "$OUTPUT"
+
 cd "$ROOTFS_DIR"
 
 # Exclude virtual mounts and snapd paths that cause permission errors in proot rootfs.
+# --ignore-failed-read: skip any remaining unreadable files instead of aborting.
 tar -czf "$OUTPUT" \
+    --ignore-failed-read \
     --exclude='./proc' \
     --exclude='./sys' \
     --exclude='./dev' \

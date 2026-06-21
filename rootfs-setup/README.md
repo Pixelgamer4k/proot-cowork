@@ -73,7 +73,8 @@ When you import the tarball, the app will:
 | Symptom | Fix |
 |---------|-----|
 | `/etc/sudoers.d/cowork: No such file or directory` | Fixed in script v2: installs `sudo` first, then `mkdir -p /etc/sudoers.d`. Re-run `03-guest-provision.sh` |
-| `can't sanitize binding /proc/self/fd/0` | Harmless warning when using heredoc stdin; scripts now use `-e bash -lc` instead |
+| `can't sanitize binding /proc/self/fd/0` | Harmless proot warning on Termux; scripts use `-- bash -lc` instead of heredoc stdin |
+| `Rootfs not found at .../installed-rootfs/ubuntu` | proot-distro v5 stores rootfs at `containers/ubuntu/rootfs/` — use updated `06-export-rootfs.sh` |
 | Black X11 screen | Ensure `--shared-tmp` and `DISPLAY=:0` |
 | Desktop won't start | Check `start-desktop.sh` exists and is executable |
 | apt errors in guest | Re-run `03-guest-provision.sh` |

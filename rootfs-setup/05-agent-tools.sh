@@ -4,7 +4,7 @@ set -euo pipefail
 DISTRO="${DISTRO:-ubuntu}"
 echo "==> Installing agent tools in $DISTRO"
 
-proot-distro login "$DISTRO" --shared-tmp -e bash -lc '
+proot-distro login "$DISTRO" --shared-tmp -- bash -lc '
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 

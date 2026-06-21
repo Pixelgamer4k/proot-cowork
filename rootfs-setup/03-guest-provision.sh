@@ -4,8 +4,8 @@ set -euo pipefail
 DISTRO="${DISTRO:-ubuntu}"
 echo "==> Provisioning guest inside $DISTRO"
 
-# Use -e instead of heredoc stdin (avoids /proc/self/fd/0 proot warning on Termux)
-proot-distro login "$DISTRO" --shared-tmp -e bash -lc '
+# proot-distro v5.3+: use "-- COMMAND" (not -e, which is --env)
+proot-distro login "$DISTRO" --shared-tmp -- bash -lc '
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 

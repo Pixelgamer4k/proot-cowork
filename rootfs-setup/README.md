@@ -78,6 +78,6 @@ When you import the tarball, the app will:
 | Desktop won't start | Check `start-desktop.sh` exists and is executable |
 | apt errors in guest | Re-run `03-guest-provision.sh` |
 | Large tarball | Remove apt cache: `apt clean` before export |
-| `Rootfs not found at .../installed-rootfs/ubuntu` | proot-distro v5 moved rootfs to `containers/ubuntu/rootfs/` — use updated `06-export-rootfs.sh` |
+| `unrecognized option: '-lc'` | proot-distro v5.3+ uses `-- bash -c` not `-e bash -lc` — pull latest scripts |
 
 See also: [docs/RESEARCH.md](../docs/RESEARCH.md) section on X11 requirements.

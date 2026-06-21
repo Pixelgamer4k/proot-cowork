@@ -32,7 +32,7 @@ if [[ ! -f "$ROOTFS_DIR/start-desktop.sh" ]]; then
 fi
 
 # Clean apt cache to reduce size
-proot-distro login "$DISTRO" --shared-tmp -e bash -lc "apt clean && rm -rf /tmp/* /var/tmp/*" || true
+proot-distro login "$DISTRO" --shared-tmp -- bash -lc "apt clean && rm -rf /tmp/* /var/tmp/*" || true
 
 cd "$ROOTFS_DIR"
 tar -czf "$OUTPUT" .

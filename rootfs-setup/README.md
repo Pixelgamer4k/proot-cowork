@@ -39,6 +39,10 @@ bash 06-export-rootfs.sh
 
 This creates `proot-cowork-rootfs.tar.gz` in your home directory.
 
+**Note:** proot-distro v5+ stores rootfs at `containers/<name>/rootfs/` (not the old `installed-rootfs/` path). The export script auto-detects both layouts.
+
+**Do not use** `proot-distro backup` for Proot Cowork — that wraps files in `ubuntu/rootfs/` subfolders. We need a flat tarball with `start-desktop.sh` at the top level.
+
 Transfer it to your phone storage, then in Proot Cowork tap **Add your rootfs** → Import.
 
 ## Required Guest Files
@@ -68,9 +72,12 @@ When you import the tarball, the app will:
 
 | Symptom | Fix |
 |---------|-----|
+| `/etc/sudoers.d/cowork: No such file or directory` | Fixed in script v2: installs `sudo` first, then `mkdir -p /etc/sudoers.d`. Re-run `03-guest-provision.sh` |
+| `can't sanitize binding /proc/self/fd/0` | Harmless warning when using heredoc stdin; scripts now use `-e bash -lc` instead |
 | Black X11 screen | Ensure `--shared-tmp` and `DISPLAY=:0` |
 | Desktop won't start | Check `start-desktop.sh` exists and is executable |
 | apt errors in guest | Re-run `03-guest-provision.sh` |
 | Large tarball | Remove apt cache: `apt clean` before export |
+| `Rootfs not found at .../installed-rootfs/ubuntu` | proot-distro v5 moved rootfs to `containers/ubuntu/rootfs/` — use updated `06-export-rootfs.sh` |
 
 See also: [docs/RESEARCH.md](../docs/RESEARCH.md) section on X11 requirements.

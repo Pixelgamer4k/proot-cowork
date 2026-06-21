@@ -101,7 +101,16 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun clearImportingState() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.IMPORTING] = false
+            prefs[Keys.IMPORT_PROGRESS] = 0f
+        }
+    }
+
     fun getRootfsDir() = context.filesDir.resolve("rootfs")
+
+    fun getRootfsPartialDir() = context.filesDir.resolve("rootfs.partial")
 
     fun getSkillsDir() = context.filesDir.resolve("skills")
 

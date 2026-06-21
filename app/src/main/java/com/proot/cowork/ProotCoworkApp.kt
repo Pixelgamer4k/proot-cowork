@@ -6,8 +6,15 @@ import android.app.NotificationManager
 import android.os.Build
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class ProotCoworkApp : Application() {
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     lateinit var settingsRepository: SettingsRepository
         private set
     lateinit var rootfsRepository: RootfsRepository
@@ -18,6 +25,9 @@ class ProotCoworkApp : Application() {
         settingsRepository = SettingsRepository(this)
         rootfsRepository = RootfsRepository(this, settingsRepository)
         createNotificationChannels()
+        appScope.launch {
+            rootfsRepository.repairStateOnStartup()
+        }
     }
 
     private fun createNotificationChannels() {

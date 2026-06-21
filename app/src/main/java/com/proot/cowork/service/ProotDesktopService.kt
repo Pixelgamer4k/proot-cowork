@@ -12,6 +12,7 @@ import com.proot.cowork.R
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.proot.ProotCommandBuilder
 import com.proot.cowork.data.proot.RuntimeBootstrap
+import com.proot.cowork.data.rootfs.RootfsValidator
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.termux.x11.X11ServerManager
@@ -50,7 +51,7 @@ class ProotDesktopService : Service() {
 
     private fun startDesktop() {
         val rootfs = settingsRepository.getRootfsDir()
-        if (!rootfs.resolve("start-desktop.sh").exists()) {
+        if (!RootfsValidator.isValid(rootfs)) {
             DesktopSession.setState(DesktopState.NO_ROOTFS)
             stopSelf()
             return
@@ -62,7 +63,11 @@ class ProotDesktopService : Service() {
 
         scope.launch {
             try {
-                X11ServerManager.ensureStarted(applicationContext)
+                if (!X11ServerManager.ensureStarted(applicationContext)) {
+                    DesktopSession.appendLog("Failed to start embedded X11 server")
+                    DesktopSession.setState(DesktopState.STOPPED)
+                    return@launch
+                }
                 val runtime = RuntimeBootstrap(applicationContext).ensureRuntime()
                 val command = ProotCommandBuilder.buildStartDesktop(
                     context = applicationContext,

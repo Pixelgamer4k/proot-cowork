@@ -43,10 +43,11 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Auto-start desktop if rootfs was previously imported
+        // Auto-start desktop only when rootfs is fully valid (prevents crash loops).
         lifecycleScope.launch {
+            app.rootfsRepository.repairStateOnStartup()
             val state = app.settingsRepository.rootfsState.first { !it.isImporting }
-            if (state.isInstalled) {
+            if (state.isInstalled && app.rootfsRepository.canStartDesktop()) {
                 app.rootfsRepository.startDesktopService()
             }
         }

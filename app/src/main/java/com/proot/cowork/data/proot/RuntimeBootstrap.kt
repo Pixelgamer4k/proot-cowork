@@ -16,12 +16,37 @@ class RuntimeBootstrap(private val context: Context) {
             )
         }
 
+        val supportLibDir = File(context.filesDir, "exec_libs").also { it.mkdirs() }
+        ensureVersionedTalloc(nativeLibDir, supportLibDir)
+
+        val ldLibraryPath = listOf(nativeLibDir, supportLibDir)
+            .joinToString(":") { it.absolutePath }
+
         return ProotRuntime(
             prootBinary = prootBin,
-            libraryPath = nativeLibDir,
+            ldLibraryPath = ldLibraryPath,
             tmpDir = File(context.filesDir, "tmp").also { it.mkdirs() },
             useLinker64 = is64BitAbi(),
         )
+    }
+
+    /**
+     * proot links against libtalloc.so.2, but AGP only packages lib*.so (not lib*.so.N)
+     * into the APK. Copy the soname beside the extracted native libs at runtime.
+     */
+    private fun ensureVersionedTalloc(nativeLibDir: File, supportLibDir: File) {
+        val tallocV2 = File(supportLibDir, "libtalloc.so.2")
+        if (tallocV2.isFile) return
+
+        val sources = listOf(
+            File(nativeLibDir, "libtalloc.so"),
+            File(nativeLibDir, "libtalloc.so.2"),
+        )
+        val source = sources.firstOrNull { it.isFile }
+            ?: throw IllegalStateException("Missing libtalloc.so in ${nativeLibDir.absolutePath}")
+
+        source.copyTo(tallocV2, overwrite = true)
+        tallocV2.setReadable(true, false)
     }
 
     private fun is64BitAbi(): Boolean {
@@ -36,7 +61,7 @@ class RuntimeBootstrap(private val context: Context) {
 
 data class ProotRuntime(
     val prootBinary: File,
-    val libraryPath: File,
+    val ldLibraryPath: String,
     val tmpDir: File,
     val useLinker64: Boolean,
 ) {

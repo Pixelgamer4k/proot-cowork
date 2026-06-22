@@ -26,7 +26,7 @@ object ProotCommandBuilder {
         val env = mapOf(
             "DISPLAY" to ":0",
             "XDG_RUNTIME_DIR" to "/tmp",
-            "LD_LIBRARY_PATH" to runtime.libraryPath.absolutePath,
+            "LD_LIBRARY_PATH" to runtime.ldLibraryPath,
             "HOME" to "/home/cowork",
             "USER" to "cowork",
             "TMPDIR" to "/tmp",

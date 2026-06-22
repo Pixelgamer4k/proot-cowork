@@ -86,7 +86,7 @@ class ProotDesktopService : Service() {
 
                 val env = hashMapOf<String, String>()
                 env.putAll(System.getenv().filterValues { it != null }.mapValues { it.value!! })
-                env["LD_LIBRARY_PATH"] = runtime.libraryPath.absolutePath
+                env["LD_LIBRARY_PATH"] = runtime.ldLibraryPath
 
                 val process = ProcessBuilder(command)
                     .directory(rootfs)

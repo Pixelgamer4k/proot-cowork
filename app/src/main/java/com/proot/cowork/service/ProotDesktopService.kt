@@ -4,6 +4,8 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.proot.cowork.MainActivity
@@ -38,10 +40,13 @@ class ProotDesktopService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Must promote within ~5s of startForegroundService(); do this before any validation/work.
+        promoteToForeground("Starting Linux desktop…")
+
         when (intent?.action) {
             ACTION_STOP -> stopDesktop()
             ACTION_REBOOT -> {
-                stopDesktop()
+                stopDesktopInternal()
                 startDesktop()
             }
             else -> startDesktop()
@@ -53,13 +58,14 @@ class ProotDesktopService : Service() {
         val rootfs = settingsRepository.getRootfsDir()
         if (!RootfsValidator.isValid(rootfs)) {
             DesktopSession.setState(DesktopState.NO_ROOTFS)
+            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification("Starting Linux desktop…"))
         DesktopSession.setState(DesktopState.STARTING)
         DesktopSession.clearLogs()
+        updateNotification("Starting Linux desktop…")
 
         scope.launch {
             try {
@@ -118,13 +124,30 @@ class ProotDesktopService : Service() {
     }
 
     private fun stopDesktop() {
+        stopDesktopInternal()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    private fun stopDesktopInternal() {
         logJob?.cancel()
         prootProcess?.destroy()
         prootProcess = null
         X11ServerManager.stop()
         DesktopSession.setState(DesktopState.STOPPED)
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+    }
+
+    private fun promoteToForeground(text: String) {
+        val notification = buildNotification(text)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun buildNotification(text: String): Notification {
@@ -151,7 +174,7 @@ class ProotDesktopService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        stopDesktop()
+        stopDesktopInternal()
         scope.cancel()
         super.onDestroy()
     }

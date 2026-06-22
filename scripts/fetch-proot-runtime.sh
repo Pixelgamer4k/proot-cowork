@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ASSETS="$ROOT/app/src/main/assets/runtime/aarch64"
 JNILIBS="$ROOT/app/src/main/jniLibs/arm64-v8a"
 
-if [[ -f "$JNILIBS/libproot_exec.so" ]]; then
+if [[ -f "$JNILIBS/libproot_exec.so" && -f "$JNILIBS/libtalloc.so.2" ]]; then
   echo "==> proot runtime already present in jniLibs"
   exit 0
 fi
@@ -35,6 +35,7 @@ cp "$shmem_src" "$ASSETS/lib/"
 # Android 10+ W^X: execute from nativeLibraryDir via linker64.
 cp "$proot_src" "$JNILIBS/libproot_exec.so"
 cp "$talloc_src" "$JNILIBS/libtalloc.so"
+cp "$talloc_src" "$JNILIBS/libtalloc.so.2"
 cp "$shmem_src" "$JNILIBS/libandroid-shmem.so"
 
 echo "==> Bundled proot runtime to jniLibs/arm64-v8a"

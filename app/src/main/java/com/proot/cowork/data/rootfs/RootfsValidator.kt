@@ -19,6 +19,7 @@ object RootfsValidator {
 
     fun repairLayout(rootfsDir: File) {
         repairRootSymlinks(rootfsDir)
+        repairGuestLinkerSymlinks(rootfsDir)
         repairXkbSymlink(rootfsDir)
         repairStartScriptShebang(rootfsDir)
     }
@@ -33,6 +34,12 @@ object RootfsValidator {
         return candidates.firstOrNull { dir ->
             dir.isDirectory && !dir.list().isNullOrEmpty()
         }
+    }
+
+    private fun repairGuestLinkerSymlinks(rootfsDir: File) {
+        val linkerReal = File(rootfsDir, "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1")
+        if (!linkerReal.isFile || linkerReal.length() == 0L) return
+        repairSymlink(rootfsDir, "usr/lib/ld-linux-aarch64.so.1", "aarch64-linux-gnu/ld-linux-aarch64.so.1")
     }
 
     private fun repairRootSymlinks(rootfsDir: File) {

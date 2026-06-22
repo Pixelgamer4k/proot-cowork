@@ -4,6 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+
 android {
     namespace = "com.proot.cowork"
     compileSdk = 35
@@ -13,7 +15,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.4.2-vnc"
+        versionName = "0.4.3-vnc"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -56,6 +58,12 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+    }
+}
+
+extensions.configure<ApplicationAndroidComponentsExtension> {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        variant.targetSdk.set(28)
     }
 }
 

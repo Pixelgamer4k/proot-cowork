@@ -74,6 +74,12 @@ object DebugStatusWriter {
         refresh(context)
     }
 
+    fun writeTextFile(context: Context, name: String, text: String) {
+        if (!BuildConfig.DEBUG) return
+        val dir = debugDir ?: File(context.filesDir, "debug").also { it.mkdirs(); debugDir = it }
+        File(dir, name).writeText(text)
+    }
+
     fun tailLogs(context: Context, lines: Int = 80): String {
         if (!BuildConfig.DEBUG) return ""
         val dir = debugDir ?: return ""

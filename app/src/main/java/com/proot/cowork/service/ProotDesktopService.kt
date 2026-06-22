@@ -13,6 +13,7 @@ import com.proot.cowork.ProotCoworkApp
 import com.proot.cowork.R
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.proot.ProotCommandBuilder
+import com.proot.cowork.data.proot.ProotProcessLauncher
 import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.rootfs.RootfsValidator
 import com.proot.cowork.data.vnc.VncReadiness
@@ -95,16 +96,13 @@ class ProotDesktopService : Service() {
                 DesktopSession.appendLog("Starting proot (VNC desktop)")
                 DebugStatusWriter.writeProotCommand(applicationContext, command)
 
-                val env = ProotCommandBuilder.guestEnvironment(applicationContext, runtime)
+                val env = ProotCommandBuilder.launchEnvironment(applicationContext, runtime)
 
-                val process = ProcessBuilder(command)
-                    .directory(applicationContext.filesDir)
-                    .redirectErrorStream(true)
-                    .apply {
-                        environment().clear()
-                        environment().putAll(env)
-                    }
-                    .start()
+                val process = ProotProcessLauncher.start(
+                    context = applicationContext,
+                    argv = command,
+                    env = env,
+                )
 
                 prootProcess = process
                 logJob = launch {

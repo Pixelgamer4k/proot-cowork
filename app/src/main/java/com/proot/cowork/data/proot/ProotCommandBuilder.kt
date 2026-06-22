@@ -6,10 +6,29 @@ import java.io.File
 
 object ProotCommandBuilder {
 
-    fun guestEnvironment(
+    /**
+     * Environment for the host-side proot process. Uses a shell launcher script so guest
+     * paths (HOME, PATH, …) do not leak into the Android process before proot starts.
+     */
+    fun launchEnvironment(
         context: Context,
         runtime: ProotRuntime,
     ): Map<String, String> = buildMap {
+        val dataDir = context.applicationInfo.dataDir
+        val legacyDataDir = "/data/data/${context.packageName}"
+
+        put("LD_LIBRARY_PATH", runtime.ldLibraryPath)
+        put("PROOT_TMP_DIR", runtime.tmpDir.absolutePath)
+        put("PROOT_LOADER", runtime.loaderPath.absolutePath)
+        put("PROOT_LOADER_32", runtime.loader32Path.absolutePath)
+        put("PROOT_NO_SECCOMP", "1")
+
+        // Termux-compatible hints for proot's Android guest exec path.
+        put("TERMUX_APP__DATA_DIR", dataDir)
+        put("TERMUX_APP__LEGACY_DATA_DIR", legacyDataDir)
+        put("TERMUX_EXEC__SYSTEM_LINKER_EXEC__MODE", "enable")
+
+        // Guest paths forwarded through proot into the rootfs.
         put("HOME", "/home/cowork")
         put("USER", "cowork")
         put("LANG", "C.UTF-8")
@@ -18,11 +37,6 @@ object ProotCommandBuilder {
         put("TMPDIR", "/tmp")
         put("XDG_RUNTIME_DIR", "/tmp")
         put("VNC_PORT", "5900")
-        put("LD_LIBRARY_PATH", runtime.ldLibraryPath)
-        put("PROOT_TMP_DIR", runtime.tmpDir.absolutePath)
-        put("PROOT_LOADER", runtime.loaderPath.absolutePath)
-        put("PROOT_LOADER_32", runtime.loader32Path.absolutePath)
-        put("PROOT_NO_SECCOMP", "1")
     }
 
     fun buildStartDesktop(
@@ -91,7 +105,6 @@ object ProotCommandBuilder {
     private fun appendProotExtensions(args: MutableList<String>) {
         args += "--kill-on-exit"
         args += "--link2symlink"
-        args += "--sysvipc"
         args += "-L"
         val hostname = Build.MODEL.ifBlank { "cowork" }
             .replace(Regex("[^A-Za-z0-9._-]"), "-")
@@ -111,24 +124,14 @@ object ProotCommandBuilder {
             "/proc",
             "/sys",
             "/dev/urandom:/dev/random",
-            "/proc/self/fd:/dev/fd",
             "${tmpDir.absolutePath}:/tmp",
             "${tmpDir.absolutePath}:/dev/shm",
             "${File(sysdataDir, "sys_empty").absolutePath}:/sys/fs/selinux",
         )
 
-        for (fd in 0..2) {
-            val hostFd = "/proc/self/fd/$fd"
-            if (File(hostFd).exists()) {
-                bindings += "$hostFd:/dev/${arrayOf("stdin", "stdout", "stderr")[fd]}"
-            }
-        }
-
         if (File("/apex").isDirectory) {
             bindings += "/apex:/apex"
         }
-
-        ProotSysdata.fakeProcBindArgs(sysdataDir).forEach { bindings += it }
 
         context?.let {
             val artifacts = File(it.filesDir, "artifacts")

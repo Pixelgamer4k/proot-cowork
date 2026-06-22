@@ -5,6 +5,7 @@ import android.net.Uri
 import com.proot.cowork.BuildConfig
 import com.proot.cowork.ProotCoworkApp
 import com.proot.cowork.data.proot.ProotCommandBuilder
+import com.proot.cowork.data.proot.ProotProcessLauncher
 import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.rootfs.RootfsValidator
 import com.proot.cowork.domain.proot.DesktopSession
@@ -127,12 +128,14 @@ object DebugBridge {
                 val command = ProotCommandBuilder.buildShell(runtime, rootfs, shellCommand)
                 DebugStatusWriter.writeProotCommand(context, command)
                 DebugStatusWriter.clearProotLog(context)
-                val env = ProotCommandBuilder.guestEnvironment(context, runtime)
-                val process = ProcessBuilder(command)
-                    .directory(context.filesDir)
-                    .redirectErrorStream(true)
-                    .apply { environment().clear(); environment().putAll(env) }
-                    .start()
+                val env = ProotCommandBuilder.launchEnvironment(context, runtime)
+                DebugStatusWriter.writeProotCommand(context, command)
+                DebugStatusWriter.clearProotLog(context)
+                val process = ProotProcessLauncher.start(
+                    context = context,
+                    argv = command,
+                    env = env,
+                )
                 BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
                     var line = reader.readLine()
                     while (line != null) {

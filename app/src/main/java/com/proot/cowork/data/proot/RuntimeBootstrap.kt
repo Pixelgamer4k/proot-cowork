@@ -18,17 +18,20 @@ class RuntimeBootstrap(private val context: Context) {
 
         val supportLibDir = File(context.filesDir, "exec_libs").also { it.mkdirs() }
         ensureVersionedTalloc(nativeLibDir, supportLibDir)
-        val loaderDir = ensureProotLoaders(nativeLibDir, supportLibDir)
+        ensureProotLoaders(nativeLibDir, supportLibDir)
 
         val ldLibraryPath = listOf(nativeLibDir, supportLibDir)
             .joinToString(":") { it.absolutePath }
+
+        val nativeLoader = File(nativeLibDir, LOADER_JNI_NAME)
+        val nativeLoader32 = File(nativeLibDir, LOADER32_JNI_NAME)
 
         return ProotRuntime(
             prootBinary = prootBin,
             ldLibraryPath = ldLibraryPath,
             tmpDir = File(context.filesDir, "tmp").also { it.mkdirs() },
-            loaderPath = File(loaderDir, LOADER_NAME),
-            loader32Path = File(loaderDir, LOADER32_NAME),
+            loaderPath = nativeLoader,
+            loader32Path = nativeLoader32,
             useLinker64 = is64BitAbi(),
         )
     }

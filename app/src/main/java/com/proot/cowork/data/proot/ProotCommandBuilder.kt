@@ -1,10 +1,22 @@
 package com.proot.cowork.data.proot
 
 import android.content.Context
-import android.os.Environment
 import java.io.File
 
 object ProotCommandBuilder {
+
+    fun guestEnvironment(
+        context: Context,
+        runtime: ProotRuntime,
+    ): Map<String, String> = mapOf(
+        "DISPLAY" to ":0",
+        "XDG_RUNTIME_DIR" to "/tmp",
+        "HOME" to "/home/cowork",
+        "USER" to "cowork",
+        "TMPDIR" to "/tmp",
+        "LD_LIBRARY_PATH" to runtime.ldLibraryPath,
+        "PROOT_TMP_DIR" to runtime.tmpDir.absolutePath,
+    )
 
     fun buildStartDesktop(
         context: Context,
@@ -12,7 +24,7 @@ object ProotCommandBuilder {
         rootfsDir: File,
     ): List<String> {
         val tmp = runtime.tmpDir
-        val x11Unix = File(tmp, ".X11-unix").also { it.mkdirs() }
+        File(tmp, ".X11-unix").mkdirs()
 
         val bindings = listOf(
             "/dev:/dev",
@@ -21,15 +33,6 @@ object ProotCommandBuilder {
             "${tmp.absolutePath}:/tmp",
             "${context.filesDir.absolutePath}/artifacts:/artifacts",
             "${context.getExternalFilesDir(null)?.absolutePath ?: context.filesDir.absolutePath}/storage:/storage",
-        )
-
-        val env = mapOf(
-            "DISPLAY" to ":0",
-            "XDG_RUNTIME_DIR" to "/tmp",
-            "LD_LIBRARY_PATH" to runtime.ldLibraryPath,
-            "HOME" to "/home/cowork",
-            "USER" to "cowork",
-            "TMPDIR" to "/tmp",
         )
 
         val prootArgs = mutableListOf<String>()
@@ -41,10 +44,7 @@ object ProotCommandBuilder {
         }
         prootArgs += "-w"
         prootArgs += "/"
-        env.forEach { (k, v) ->
-            prootArgs += "-0"
-            prootArgs += "$k=$v"
-        }
+        prootArgs += "/usr/bin/bash"
         prootArgs += "/start-desktop.sh"
         return runtime.launchCommand(prootArgs)
     }
@@ -70,11 +70,7 @@ object ProotCommandBuilder {
         }
         prootArgs += "-w"
         prootArgs += "/root"
-        prootArgs += "-0"
-        prootArgs += "LD_LIBRARY_PATH=${runtime.ldLibraryPath}"
-        prootArgs += "-0"
-        prootArgs += "HOME=/home/cowork"
-        prootArgs += "/bin/bash"
+        prootArgs += "/usr/bin/bash"
         prootArgs += "-lc"
         prootArgs += command
         return runtime.launchCommand(prootArgs)

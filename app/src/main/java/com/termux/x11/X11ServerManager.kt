@@ -124,7 +124,7 @@ object X11ServerManager {
     private fun configureEnvironment(context: Context, rootfs: File): Boolean {
         try {
             Os.setenv("TERMUX_X11_OVERRIDE_PACKAGE", context.packageName, true)
-            Os.setenv("TMPDIR", context.cacheDir.absolutePath, true)
+            Os.setenv("TMPDIR", File(context.filesDir, "tmp").absolutePath, true)
         } catch (e: Exception) {
             Log.w(TAG, "Could not set X11 environment", e)
         }

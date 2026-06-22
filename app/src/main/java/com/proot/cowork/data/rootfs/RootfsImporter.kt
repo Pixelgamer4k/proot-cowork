@@ -10,6 +10,8 @@ import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.Paths
 
 class RootfsImporter(private val context: Context) {
 
@@ -46,26 +48,28 @@ class RootfsImporter(private val context: Context) {
                                 val name = entry.name.removePrefix("./").removePrefix("/")
                                 if (name.isNotEmpty() && name != ".") {
                                     val outFile = File(destDir, name)
-                                    if (entry.isDirectory) {
-                                        outFile.mkdirs()
-                                    } else {
-                                        outFile.parentFile?.mkdirs()
-                                        FileOutputStream(outFile).use { fos ->
-                                            val buffer = ByteArray(256 * 1024)
-                                            var read = tar.read(buffer)
-                                            while (read != -1) {
-                                                fos.write(buffer, 0, read)
-                                                bytesRead += read
-                                                if (size > 0) {
-                                                    reportProgress(bytesRead.toFloat() / size)
-                                                }
-                                                read = tar.read(buffer)
+                                    when {
+                                        entry.isDirectory -> outFile.mkdirs()
+                                        entry.isSymbolicLink -> {
+                                            outFile.parentFile?.mkdirs()
+                                            if (outFile.exists()) outFile.delete()
+                                            Files.createSymbolicLink(
+                                                outFile.toPath(),
+                                                Paths.get(entry.linkName),
+                                            )
+                                        }
+                                        entry.isLink -> {
+                                            // Hard link: fall back to extracting file bytes.
+                                            outFile.parentFile?.mkdirs()
+                                            extractFile(tar, outFile, entry)
+                                        }
+                                        else -> {
+                                            outFile.parentFile?.mkdirs()
+                                            bytesRead += extractFile(tar, outFile, entry)
+                                            if (size > 0) {
+                                                reportProgress(bytesRead.toFloat() / size)
                                             }
                                         }
-                                        val mode = entry.mode
-                                        if (mode and 64 != 0) outFile.setExecutable(true, false)
-                                        if (mode and 128 != 0) outFile.setReadable(true, false)
-                                        if (mode and 1 != 0) outFile.setWritable(true, false)
                                     }
                                 }
                                 entry = tar.nextEntry
@@ -82,6 +86,8 @@ class RootfsImporter(private val context: Context) {
             return@withContext ImportResult.Error(e.message ?: "Import failed")
         }
 
+        RootfsValidator.repairLayout(destDir)
+
         val startScript = File(destDir, "start-desktop.sh")
         if (!startScript.exists()) {
             destDir.deleteRecursively()
@@ -91,6 +97,24 @@ class RootfsImporter(private val context: Context) {
         reportProgress(1f)
         startScript.setExecutable(true, false)
         ImportResult.Success(destDir)
+    }
+
+    private fun extractFile(tar: TarArchiveInputStream, outFile: File, entry: TarArchiveEntry): Long {
+        var bytesRead = 0L
+        FileOutputStream(outFile).use { fos ->
+            val buffer = ByteArray(256 * 1024)
+            var read = tar.read(buffer)
+            while (read != -1) {
+                fos.write(buffer, 0, read)
+                bytesRead += read
+                read = tar.read(buffer)
+            }
+        }
+        val mode = entry.mode
+        if (mode and 64 != 0) outFile.setExecutable(true, false)
+        if (mode and 128 != 0) outFile.setReadable(true, false)
+        if (mode and 1 != 0) outFile.setWritable(true, false)
+        return bytesRead
     }
 }
 

@@ -6,7 +6,7 @@ import com.termux.x11.Prefs
 
 object EmbeddedX11 {
     fun ensurePrefs(context: Context) {
-        if (MainActivity.getPrefs() == null) {
+        if (MainActivity.prefs == null) {
             MainActivity.prefs = Prefs(context.applicationContext)
         }
     }

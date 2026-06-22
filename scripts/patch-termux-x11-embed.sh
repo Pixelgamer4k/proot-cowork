@@ -96,13 +96,8 @@ patch_file(main_activity, [
         return prefs;
     }''',
         '''    public static Prefs getPrefs() {
-        if (prefs == null) {
-            Context ctx = CmdEntryPoint.ctx;
-            if (ctx == null && instance != null)
-                ctx = instance;
-            if (ctx != null)
-                prefs = new Prefs(ctx);
-        }
+        if (prefs == null && instance != null)
+            prefs = new Prefs(instance);
         return prefs;
     }''',
     ),

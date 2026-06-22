@@ -32,21 +32,21 @@ object ProotCommandBuilder {
             "TMPDIR" to "/tmp",
         )
 
-        val argv = mutableListOf(runtime.prootBinary.absolutePath)
-        argv += "-r"
-        argv += rootfsDir.absolutePath
+        val prootArgs = mutableListOf<String>()
+        prootArgs += "-r"
+        prootArgs += rootfsDir.absolutePath
         bindings.forEach { bind ->
-            argv += "-b"
-            argv += bind
+            prootArgs += "-b"
+            prootArgs += bind
         }
-        argv += "-w"
-        argv += "/"
+        prootArgs += "-w"
+        prootArgs += "/"
         env.forEach { (k, v) ->
-            argv += "-0"
-            argv += "$k=$v"
+            prootArgs += "-0"
+            prootArgs += "$k=$v"
         }
-        argv += "/start-desktop.sh"
-        return argv
+        prootArgs += "/start-desktop.sh"
+        return runtime.launchCommand(prootArgs)
     }
 
     fun buildShell(
@@ -61,22 +61,22 @@ object ProotCommandBuilder {
             "/sys:/sys",
             "${tmp.absolutePath}:/tmp",
         )
-        val argv = mutableListOf(runtime.prootBinary.absolutePath)
-        argv += "-r"
-        argv += rootfsDir.absolutePath
+        val prootArgs = mutableListOf<String>()
+        prootArgs += "-r"
+        prootArgs += rootfsDir.absolutePath
         bindings.forEach { bind ->
-            argv += "-b"
-            argv += bind
+            prootArgs += "-b"
+            prootArgs += bind
         }
-        argv += "-w"
-        argv += "/root"
-        argv += "-0"
-        argv += "LD_LIBRARY_PATH=${runtime.libraryPath.absolutePath}"
-        argv += "-0"
-        argv += "HOME=/home/cowork"
-        argv += "/bin/bash"
-        argv += "-lc"
-        argv += command
-        return argv
+        prootArgs += "-w"
+        prootArgs += "/root"
+        prootArgs += "-0"
+        prootArgs += "LD_LIBRARY_PATH=${runtime.libraryPath.absolutePath}"
+        prootArgs += "-0"
+        prootArgs += "HOME=/home/cowork"
+        prootArgs += "/bin/bash"
+        prootArgs += "-lc"
+        prootArgs += command
+        return runtime.launchCommand(prootArgs)
     }
 }

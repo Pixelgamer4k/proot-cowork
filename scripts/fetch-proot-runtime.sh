@@ -2,14 +2,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DEST="$ROOT/app/src/main/assets/runtime/aarch64"
+ASSETS="$ROOT/app/src/main/assets/runtime/aarch64"
+JNILIBS="$ROOT/app/src/main/jniLibs/arm64-v8a"
 
-if [[ -f "$DEST/bin/proot" ]]; then
-  echo "==> proot runtime already present"
+if [[ -f "$JNILIBS/libproot_exec.so" ]]; then
+  echo "==> proot runtime already present in jniLibs"
   exit 0
 fi
 
-mkdir -p "$DEST/bin" "$DEST/lib"
+mkdir -p "$ASSETS/bin" "$ASSETS/lib" "$JNILIBS"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
@@ -21,9 +22,19 @@ dpkg-deb -x "$tmpdir/proot.deb" "$tmpdir/pe"
 dpkg-deb -x "$tmpdir/libtalloc.deb" "$tmpdir/le"
 dpkg-deb -x "$tmpdir/libshmem.deb" "$tmpdir/se"
 
-cp "$tmpdir/pe/data/data/com.termux/files/usr/bin/proot" "$DEST/bin/"
-cp -P "$tmpdir/le/data/data/com.termux/files/usr/lib/libtalloc.so"* "$DEST/lib/"
-cp "$tmpdir/se/data/data/com.termux/files/usr/lib/libandroid-shmem.so" "$DEST/lib/"
-chmod +x "$DEST/bin/proot"
+proot_src="$tmpdir/pe/data/data/com.termux/files/usr/bin/proot"
+talloc_src="$tmpdir/le/data/data/com.termux/files/usr/lib/libtalloc.so.2.4.3"
+shmem_src="$tmpdir/se/data/data/com.termux/files/usr/lib/libandroid-shmem.so"
 
-echo "==> Bundled proot runtime to assets"
+# Legacy assets path (unused at runtime; kept for reference tooling).
+cp "$proot_src" "$ASSETS/bin/proot"
+chmod +x "$ASSETS/bin/proot"
+cp -P "$tmpdir/le/data/data/com.termux/files/usr/lib/libtalloc.so"* "$ASSETS/lib/"
+cp "$shmem_src" "$ASSETS/lib/"
+
+# Android 10+ W^X: execute from nativeLibraryDir via linker64.
+cp "$proot_src" "$JNILIBS/libproot_exec.so"
+cp "$talloc_src" "$JNILIBS/libtalloc.so"
+cp "$shmem_src" "$JNILIBS/libandroid-shmem.so"
+
+echo "==> Bundled proot runtime to jniLibs/arm64-v8a"

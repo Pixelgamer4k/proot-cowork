@@ -16,8 +16,7 @@ object ProotCommandBuilder {
         put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
         put("TERM", "xterm-256color")
         put("TMPDIR", "/tmp")
-        put("DISPLAY", ":0")
-        put("XDG_RUNTIME_DIR", "/tmp")
+        put("VNC_PORT", "5900")
         put("LD_LIBRARY_PATH", runtime.ldLibraryPath)
         put("PROOT_TMP_DIR", runtime.tmpDir.absolutePath)
         put("PROOT_LOADER", runtime.loaderPath.absolutePath)
@@ -31,10 +30,7 @@ object ProotCommandBuilder {
         rootfsDir: File,
     ): List<String> {
         val tmp = runtime.tmpDir
-        File(tmp, ".X11-unix").mkdirs()
-        tmp.setReadable(true, false)
-        tmp.setWritable(true, false)
-        tmp.setExecutable(true, false)
+        tmp.mkdirs()
 
         val sysdataDir = File(context.filesDir, "sysdata")
         ProotSysdata.ensure(sysdataDir)
@@ -117,7 +113,6 @@ object ProotCommandBuilder {
             "/dev/urandom:/dev/random",
             "/proc/self/fd:/dev/fd",
             "${tmpDir.absolutePath}:/tmp",
-            "${tmpDir.absolutePath}/.X11-unix:/tmp/.X11-unix",
             "${tmpDir.absolutePath}:/dev/shm",
             "${File(sysdataDir, "sys_empty").absolutePath}:/sys/fs/selinux",
         )

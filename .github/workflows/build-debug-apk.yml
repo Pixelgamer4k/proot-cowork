@@ -25,23 +25,15 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Setup termux-x11 module
-        run: bash scripts/setup-x11-module.sh
-
       - name: Fetch proot runtime
         run: bash scripts/fetch-proot-runtime.sh
-
-      - name: Setup NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27c
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
-        timeout-minutes: 90
+        timeout-minutes: 30
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4

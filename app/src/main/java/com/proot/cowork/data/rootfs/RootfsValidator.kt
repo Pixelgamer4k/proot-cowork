@@ -1,5 +1,6 @@
 package com.proot.cowork.data.rootfs
 
+import android.content.Context
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -24,23 +25,33 @@ object RootfsValidator {
         return true
     }
 
+    fun hasVncStack(rootfsDir: File): Boolean {
+        repairLayout(rootfsDir)
+        return resolveGuestBinary(rootfsDir, "Xvfb") != null &&
+            resolveGuestBinary(rootfsDir, "x11vnc") != null
+    }
+
+    fun ensureVncStartScript(context: Context, rootfsDir: File) {
+        val script = context.assets.open("desktop/start-desktop-vnc.sh")
+            .bufferedReader()
+            .use { it.readText() }
+        val out = File(rootfsDir, "start-desktop.sh")
+        out.writeText(script)
+        out.setExecutable(true, false)
+    }
+
+    fun resolveGuestBinary(rootfsDir: File, name: String): File? {
+        val candidates = listOf(
+            File(rootfsDir, "usr/bin/$name"),
+            File(rootfsDir, "bin/$name"),
+        )
+        return candidates.firstOrNull { it.isFile && it.length() > 0L }
+    }
+
     fun repairLayout(rootfsDir: File) {
         repairRootSymlinks(rootfsDir)
         repairGuestLinkerSymlinks(rootfsDir)
-        repairXkbSymlink(rootfsDir)
         repairStartScriptShebang(rootfsDir)
-    }
-
-    fun resolveXkbConfigRoot(rootfsDir: File): File? {
-        repairXkbSymlink(rootfsDir)
-        val candidates = listOf(
-            File(rootfsDir, "usr/share/X11/xkb"),
-            File(rootfsDir, "usr/share/xkeyboard-config-2"),
-            File(rootfsDir, "etc/X11/xkb"),
-        )
-        return candidates.firstOrNull { dir ->
-            dir.isDirectory && !dir.list().isNullOrEmpty()
-        }
     }
 
     private fun repairGuestLinkerSymlinks(rootfsDir: File) {
@@ -74,23 +85,6 @@ object RootfsValidator {
             Files.createSymbolicLink(path.toPath(), Paths.get(target))
         } catch (_: Exception) {
             // Symlinks may fail on some devices; caller can use absolute guest paths.
-        }
-    }
-
-    private fun repairXkbSymlink(rootfsDir: File) {
-        val xkbPath = File(rootfsDir, "usr/share/X11/xkb")
-        val xkbData = File(rootfsDir, "usr/share/xkeyboard-config-2")
-        if (!xkbData.isDirectory || xkbPath.isDirectory) return
-        if (xkbPath.exists() && !xkbPath.delete()) return
-        val parent = xkbPath.parentFile ?: return
-        if (!parent.exists() && !parent.mkdirs()) return
-        try {
-            Files.createSymbolicLink(
-                xkbPath.toPath(),
-                Paths.get("../xkeyboard-config-2"),
-            )
-        } catch (_: Exception) {
-            // X11 can still use XKB_CONFIG_ROOT pointing at xkeyboard-config-2.
         }
     }
 

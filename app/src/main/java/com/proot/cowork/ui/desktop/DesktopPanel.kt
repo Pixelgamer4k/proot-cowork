@@ -165,13 +165,13 @@ private fun StartingContent() {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         CircularProgressIndicator()
         Spacer(modifier = Modifier.height(12.dp))
-        Text("Booting X11 + proot desktop…")
+        Text("Booting proot + VNC desktop…")
     }
 }
 
 @Composable
 private fun RunningDesktopContent() {
-    X11DesktopView(
+    VncDesktopView(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),

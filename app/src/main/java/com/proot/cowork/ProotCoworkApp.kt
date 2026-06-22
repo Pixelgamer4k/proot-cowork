@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.os.Build
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
-import com.proot.cowork.ui.desktop.EmbeddedX11
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,7 +22,6 @@ class ProotCoworkApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        EmbeddedX11.ensurePrefs(this)
         settingsRepository = SettingsRepository(this)
         rootfsRepository = RootfsRepository(this, settingsRepository)
         createNotificationChannels()

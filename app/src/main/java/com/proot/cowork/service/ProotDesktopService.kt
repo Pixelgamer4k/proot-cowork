@@ -15,9 +15,10 @@ import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.proot.ProotCommandBuilder
 import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.rootfs.RootfsValidator
+import com.proot.cowork.data.vnc.VncPortProbe
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
-import com.termux.x11.X11ServerManager
+import com.proot.cowork.domain.vnc.VncSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,7 +41,6 @@ class ProotDesktopService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Must promote within ~5s of startForegroundService(); do this before any validation/work.
         promoteToForeground("Starting Linux desktop…")
 
         when (intent?.action) {
@@ -64,6 +64,17 @@ class ProotDesktopService : Service() {
         }
 
         RootfsValidator.repairLayout(rootfs)
+        RootfsValidator.ensureVncStartScript(applicationContext, rootfs)
+
+        if (!RootfsValidator.hasVncStack(rootfs)) {
+            DesktopSession.appendLog(
+                "Rootfs missing xvfb/x11vnc. Rebuild with: apt install -y xvfb x11vnc xfce4",
+            )
+            DesktopSession.setState(DesktopState.STOPPED)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
 
         DesktopSession.setState(DesktopState.STARTING)
         DesktopSession.clearLogs()
@@ -71,21 +82,14 @@ class ProotDesktopService : Service() {
 
         scope.launch {
             try {
-                if (!X11ServerManager.ensureStarted(applicationContext, rootfs)) {
-                    DesktopSession.appendLog("Failed to start embedded X11 server")
-                    DesktopSession.setState(DesktopState.STOPPED)
-                    return@launch
-                }
                 val runtime = RuntimeBootstrap(applicationContext).ensureRuntime()
                 val command = ProotCommandBuilder.buildStartDesktop(
                     context = applicationContext,
                     runtime = runtime,
                     rootfsDir = rootfs,
                 )
-                DesktopSession.appendLog("Starting proot: ${command.joinToString(" ")}")
+                DesktopSession.appendLog("Starting proot (VNC desktop)")
 
-                // Use a clean guest environment. Merging Android's host env (especially
-                // LD_PRELOAD) breaks proot guest execution on Android.
                 val env = ProotCommandBuilder.guestEnvironment(applicationContext, runtime)
 
                 val process = ProcessBuilder(command)
@@ -97,8 +101,17 @@ class ProotDesktopService : Service() {
                 prootProcess = process
                 logJob = launch { streamLogs(process) }
 
+                updateNotification("Waiting for VNC…")
+                if (!VncPortProbe.waitUntilOpen()) {
+                    DesktopSession.appendLog("Timed out waiting for VNC on 127.0.0.1:5900")
+                    DesktopSession.setState(DesktopState.STOPPED)
+                    process.destroy()
+                    return@launch
+                }
+
+                DesktopSession.appendLog("VNC ready on port 5900")
                 DesktopSession.setState(DesktopState.RUNNING)
-                updateNotification("Linux desktop running")
+                updateNotification("Linux desktop running (VNC)")
 
                 val exit = process.waitFor()
                 DesktopSession.appendLog("proot exited with code $exit")
@@ -135,7 +148,7 @@ class ProotDesktopService : Service() {
         logJob?.cancel()
         prootProcess?.destroy()
         prootProcess = null
-        X11ServerManager.stop()
+        VncSession.disconnect()
         DesktopSession.setState(DesktopState.STOPPED)
     }
 

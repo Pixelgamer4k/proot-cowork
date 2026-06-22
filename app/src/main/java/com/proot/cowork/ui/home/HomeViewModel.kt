@@ -11,6 +11,7 @@ import com.proot.cowork.domain.agent.MessageRole
 import com.proot.cowork.domain.agent.SwarmTask
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
+import com.proot.cowork.domain.vnc.VncSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -68,13 +69,22 @@ class HomeViewModel(
 
     fun onScreenshot() {
         viewModelScope.launch {
+            val frame = VncSession.currentFrame()
             val path = settingsRepository.getArtifactsDir().resolve("screenshot_${System.currentTimeMillis()}.png")
+            val message = if (frame != null) {
+                java.io.FileOutputStream(path).use { out ->
+                    frame.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                }
+                "Screenshot saved: ${path.name}"
+            } else {
+                "No VNC frame available yet"
+            }
             localState.update {
                 it.copy(
                     messages = it.messages + AgentMessage(
                         id = UUID.randomUUID().toString(),
                         role = MessageRole.SYSTEM,
-                        content = "Screenshot: ${path.absolutePath} (X11 framebuffer capture in Phase 2 polish)",
+                        content = message,
                     ),
                 )
             }

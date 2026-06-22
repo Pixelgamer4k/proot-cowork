@@ -22,13 +22,6 @@
         tools:replace="android:allowBackup,android:theme,android:label">
 
         <activity
-            android:name="com.termux.x11.MainActivity"
-            tools:node="remove" />
-        <activity
-            android:name="com.termux.x11.LoriePreferences"
-            tools:node="remove" />
-
-        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"

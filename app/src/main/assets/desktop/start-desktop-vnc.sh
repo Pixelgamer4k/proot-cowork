@@ -66,29 +66,26 @@ paint_background() {
   fi
 }
 
-launch_terminal() {
-  local term="$1"
-  local base
-  base="$(basename "$(readlink -f "$term" 2>/dev/null || echo "$term")")"
-  case "$base" in
-    xfce4-terminal)
-      DISPLAY=:99 "$term" \
-        --maximize \
-        --title="Proot Cowork" \
-        --color-bg="#1e1e2e" \
-        --color-text="#cdd6f4" \
-        --font="Monospace 14" \
-        -e bash &
-      ;;
-    xterm)
-      DISPLAY=:99 "$term" -maximized -fa Monospace -fs 14 \
-        -bg "#1e1e2e" -fg "#cdd6f4" -title "Proot Cowork" -e bash -l &
-      ;;
-    *)
-      DISPLAY=:99 "$term" --maximize --title="Proot Cowork" -e bash 2>/dev/null \
-        || DISPLAY=:99 "$term" -e bash &
-      ;;
-  esac
+launch_visible_apps() {
+  if [ -x /usr/bin/xterm ]; then
+    echo "Desktop: starting xterm"
+    DISPLAY=:99 /usr/bin/xterm -maximized -bg "#1e1e2e" -fg "#cdd6f4" \
+      -title "Proot Cowork" -e bash -l &
+    return
+  fi
+
+  # GTK terminals (xfce4-terminal) abort under app-launched proot: no bwrap.
+  if [ -x /usr/bin/xclock ]; then
+    echo "Desktop: starting xclock"
+    DISPLAY=:99 /usr/bin/xclock -digital -strftime "%H:%M:%S" \
+      -geometry 420x48+24+24 -bg "#1e1e2e" -fg "#cdd6f4" -resize -noresize &
+  fi
+  if [ -x /usr/bin/xmessage ]; then
+    echo "Desktop: starting welcome banner"
+    DISPLAY=:99 /usr/bin/xmessage -center -default okay -timeout 0 \
+      -bg "#1e1e2e" -fg "#cdd6f4" -fn "10x20" \
+      "Proot Cowork desktop is running." &
+  fi
 }
 
 # Build the visible desktop before x11vnc snapshots the framebuffer.
@@ -98,14 +95,6 @@ WM=""
 for candidate in /usr/bin/openbox /usr/bin/fluxbox; do
   if [ -x "$candidate" ]; then
     WM="$candidate"
-    break
-  fi
-done
-
-TERM_BIN=""
-for candidate in /usr/bin/xfce4-terminal /usr/bin/xterm /usr/bin/x-terminal-emulator; do
-  if [ -x "$candidate" ]; then
-    TERM_BIN="$candidate"
     break
   fi
 done
@@ -120,19 +109,8 @@ if [ -n "$WM" ]; then
 fi
 
 paint_background
-
-if [ -n "$TERM_BIN" ]; then
-  echo "Desktop: starting terminal $TERM_BIN"
-  launch_terminal "$TERM_BIN"
-  sleep 2
-  if DISPLAY=:99 xwininfo -root -tree 2>/dev/null | grep -qiE 'xfce4-terminal|XTerm|Proot Cowork'; then
-    echo "Desktop: terminal window visible"
-  else
-    echo "Desktop: terminal may have failed to map (check xwininfo)"
-  fi
-else
-  echo "Desktop: no terminal binary found"
-fi
+launch_visible_apps
+sleep 1
 set -e
 
 vnc_listening() {
@@ -174,5 +152,6 @@ trap cleanup INT TERM
 
 wait "$XVFB_PID" "$X11VNC_PID"
 kill "$wm_pid" 2>/dev/null || true
-pkill -x xfce4-terminal 2>/dev/null || true
 pkill -x xterm 2>/dev/null || true
+pkill -x xclock 2>/dev/null || true
+pkill -x xmessage 2>/dev/null || true

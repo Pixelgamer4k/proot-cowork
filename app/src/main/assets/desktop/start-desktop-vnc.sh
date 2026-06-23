@@ -107,7 +107,12 @@ EOF
   fi
   cp "$stub" /usr/bin/bwrap
   chmod +x /usr/bin/bwrap
-  echo "Desktop: guest stubs installed (/usr/bin/bwrap replaced)"
+  if [ -x /usr/bin/dbus-launch ] && [ ! -f /usr/bin/dbus-launch.real ]; then
+    mv /usr/bin/dbus-launch /usr/bin/dbus-launch.real
+  fi
+  cp /usr/local/bin/dbus-launch /usr/bin/dbus-launch
+  chmod +x /usr/bin/dbus-launch
+  echo "Desktop: guest stubs installed (/usr/bin/bwrap and dbus-launch replaced)"
 }
 
 launch_visible_apps() {
@@ -124,6 +129,8 @@ launch_visible_apps() {
     echo "Desktop: starting xfce4-terminal"
     export GTK_USE_PORTAL=0
     export NO_AT_BRIDGE=1
+    export GDK_PIXBUF_DISABLE_GLYCIN=1
+    export GTK_ICON_THEME_NAME=HighContrast
     DISPLAY=:99 /usr/bin/xfce4-terminal \
       --maximize \
       --title="Proot Cowork" \

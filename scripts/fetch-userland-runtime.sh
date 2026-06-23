@@ -31,4 +31,13 @@ for name in startVNCServer.sh startVNCServerStep2.sh ld.so.preload nosudo userla
   fi
 done
 
+UBUNTU_ARM64="https://raw.githubusercontent.com/CypherpunkArmory/UserLAnd-Assets-Ubuntu/master/assets/arm64"
+for name in libdisableselinux.so; do
+  dest="$GUEST/$name"
+  if [[ ! -f "$dest" ]]; then
+    curl -fsSL "$UBUNTU_ARM64/$name" -o "$dest"
+    echo "==> Fetched guest-support/$name"
+  fi
+done
+
 echo "==> UserLAnd runtime fetch complete (BSD-2-Clause — see third_party/USERLAND-NOTICE.md)"

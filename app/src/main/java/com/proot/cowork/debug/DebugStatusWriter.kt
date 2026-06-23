@@ -21,7 +21,7 @@ object DebugStatusWriter {
     fun refresh(context: Context) {
         if (!BuildConfig.DEBUG) return
         val dir = debugDir ?: File(context.filesDir, "debug").also { it.mkdirs(); debugDir = it }
-        val rootfs = File(context.filesDir, "rootfs")
+        val rootfs = File(context.filesDir, com.proot.cowork.userland.UserlandConfig.FILESYSTEM_DIR)
         val status = JSONObject().apply {
             put("version", BuildConfig.VERSION_NAME)
             put("package", context.packageName)
@@ -30,8 +30,8 @@ object DebugStatusWriter {
             put("deviceModel", Build.MODEL)
             put("abis", Build.SUPPORTED_ABIS.joinToString(","))
             put("rootfsInstalled", rootfs.isDirectory)
-            put("rootfsHasXvfb", File(rootfs, "usr/bin/Xvfb").isFile)
-            put("rootfsHasX11vnc", File(rootfs, "usr/bin/x11vnc").isFile)
+            put("rootfsHasTightVnc", File(rootfs, "usr/bin/tightvncserver").isFile)
+            put("rootfsHasUserlandSupport", File(rootfs, "support/startVNCServer.sh").isFile)
             put("lastProotCommand", readText(dir, "last-proot-command.txt"))
             put("lastProotExit", readText(dir, "last-proot-exit.txt"))
             put("recentLogs", DesktopSession.logLines.value.takeLast(30).joinToString("\n"))

@@ -20,11 +20,9 @@ object UserlandGuestSupport {
         }
 
         val prootVersion = File(supportDir, ".proot_version")
-        if (!prootVersion.exists()) {
-            // Match UserLAnd proot_meta_leveldb when leveldb build is bundled in host support.
-            val useLevelDb = File(context.filesDir, "support/proot_meta_leveldb").exists()
-            prootVersion.writeText(if (useLevelDb) "_meta_leveldb" else "")
-        }
+        // Match execInProot.sh: plain proot unless guest was extracted with support/meta_db.
+        val hasMetaDb = File(supportDir, "meta_db").isDirectory
+        prootVersion.writeText(if (hasMetaDb) "_meta_leveldb" else "")
 
         val extractionMarker = File(supportDir, ".success_filesystem_extraction")
         if (!extractionMarker.exists()) {

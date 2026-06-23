@@ -4,18 +4,15 @@ import android.content.Context
 import android.net.Uri
 import com.proot.cowork.BuildConfig
 import com.proot.cowork.ProotCoworkApp
-import com.proot.cowork.data.proot.ProotCommandBuilder
-import com.proot.cowork.data.proot.ProotProcessLauncher
-import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.rootfs.RootfsValidator
+import com.proot.cowork.userland.UserlandConfig
+import com.proot.cowork.userland.UserlandFiles
 import com.proot.cowork.domain.proot.DesktopSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.io.BufferedReader
 import java.io.File
-import java.io.InputStreamReader
 
 object DebugBridge {
 
@@ -59,11 +56,7 @@ object DebugBridge {
                 importRootfsAsync(context, path)
                 "Import started from $path (check status.json)"
             }
-            "RUN_PROOT_SHELL" -> {
-                val shellCmd = extras["command"] ?: "echo hello"
-                runProotShellAsync(context, shellCmd)
-                "Proot shell started: $shellCmd"
-            }
+            "RUN_PROOT_SHELL" -> legacyProotShellDisabled()
             else -> "Unknown command: $command. Use: DUMP_STATUS, START_DESKTOP, STOP_DESKTOP, REBOOT_DESKTOP, TAIL_LOGS, DUMP_PROOT_CMD, IMPORT_ROOTFS, RUN_PROOT_SHELL"
         }
     }
@@ -86,11 +79,28 @@ object DebugBridge {
         if (!RootfsValidator.isValid(rootfs)) {
             return "Rootfs invalid or missing at ${rootfs.absolutePath}"
         }
-        val runtime = RuntimeBootstrap(context).ensureRuntime()
-        val command = ProotCommandBuilder.buildStartDesktop(context, runtime, rootfs)
+        val ulaFiles = UserlandFiles(app, app.applicationInfo.nativeLibraryDir)
+        if (!ulaFiles.busybox.isFile || !ulaFiles.proot.isFile) {
+            return "UserLAnd runtime missing (busybox/proot in files/support)"
+        }
+        val command = listOf(
+            ulaFiles.busybox.absolutePath,
+            "sh",
+            "support/execInProot.sh",
+            "/support/startVNCServer.sh",
+        )
         DebugStatusWriter.writeProotCommand(context, command)
-        return command.joinToString(" ")
+        return buildString {
+            append(command.joinToString(" "))
+            append("  # UserLAnd backend (filesystem=")
+            append(UserlandConfig.FILESYSTEM_DIR)
+            append(")")
+        }
     }
+
+    private fun legacyProotShellDisabled(): String =
+        "RUN_PROOT_SHELL disabled: legacy ProotCommandBuilder uses --sysvipc and conflicts " +
+            "with UserLAnd backend. Use START_DESKTOP or TAIL_LOGS."
 
     private fun importRootfsAsync(context: Context, path: String) {
         scope.launch {
@@ -133,43 +143,4 @@ object DebugBridge {
         return candidates.firstOrNull { it.isFile && it.canRead() && it.length() > 0L }
     }
 
-    private fun runProotShellAsync(context: Context, shellCommand: String) {
-        scope.launch {
-            val app = context.applicationContext as ProotCoworkApp
-            val rootfs = app.settingsRepository.getRootfsDir()
-            if (!RootfsValidator.isValid(rootfs)) {
-                DesktopSession.appendLog("RUN_PROOT_SHELL: invalid rootfs")
-                return@launch
-            }
-            try {
-                val runtime = RuntimeBootstrap(context).ensureRuntime()
-                val command = ProotCommandBuilder.buildShell(context, runtime, rootfs, shellCommand)
-                DebugStatusWriter.writeProotCommand(context, command)
-                DebugStatusWriter.clearProotLog(context)
-                val env = ProotCommandBuilder.launchEnvironment(context, runtime)
-                DebugStatusWriter.writeProotCommand(context, command)
-                DebugStatusWriter.clearProotLog(context)
-                val process = ProotProcessLauncher.start(
-                    context = context,
-                    argv = command,
-                    env = env,
-                )
-                BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                    var line = reader.readLine()
-                    while (line != null) {
-                        DesktopSession.appendLog("[shell] $line")
-                        DebugStatusWriter.appendProotLog(context, line)
-                        line = reader.readLine()
-                    }
-                }
-                val exit = process.waitFor()
-                DebugStatusWriter.writeProotExit(context, exit)
-                DesktopSession.appendLog("[shell] exit=$exit")
-                DebugStatusWriter.refresh(context)
-            } catch (e: Exception) {
-                DesktopSession.appendLog("[shell] error: ${e.message}")
-                DebugStatusWriter.refresh(context)
-            }
-        }
-    }
 }

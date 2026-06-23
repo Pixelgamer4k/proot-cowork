@@ -26,3 +26,4 @@ files/1/
 
 # UserLAnd / proot native libs (fetched in CI via scripts/fetch-userland-runtime.sh)
 app/src/main/jniLibs/
+third_party/termux-x11/

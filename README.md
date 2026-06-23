@@ -15,13 +15,21 @@ Android-native AI cowork agent with embedded proot Linux desktop. Inspired by Ki
 
 ## Build
 
-Debug APKs are built via GitHub Actions on every push to `main`. Phase 2 embeds **termux-x11** (native X11 server) — first CI build may take ~30–60 minutes.
+**v0.5.0-termux** embeds **Termux:X11** (native X11 on `:0`) and optional **Termux bootstrap** (`files/usr`). Desktop uses `startxfce4` like Termux — not the VNC/Xvfb path.
 
 ```bash
-# Local build (requires Android SDK + NDK)
+# One-time: clone & patch termux-x11 native module
 bash scripts/setup-x11-module.sh
+
+# Optional (~100MB): bundle full Termux prefix in APK
+bash scripts/fetch-termux-bootstrap.sh
+
+# Local build needs a JDK (not JRE), e.g. Temurin 17:
+export JAVA_HOME="$HOME/.local/jdks/temurin-17"   # after installing a JDK
 ./gradlew assembleDebug
 ```
+
+Debug APKs are built via GitHub Actions on every push to `main`. First CI build with termux-x11 may take ~30–60 minutes.
 
 ```bash
 # Trigger manually

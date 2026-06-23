@@ -1,0 +1,34 @@
+#!/usr/bin/bash
+export DISPLAY=:99
+export GTK_USE_PORTAL=0
+export NO_AT_BRIDGE=1
+export GDK_PIXBUF_DISABLE_GLYCIN=1
+
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -x /usr/bin/dbus-daemon ]; then
+  DBUS_SESSION_BUS_ADDRESS="$(cd /tmp && dbus-daemon --session --fork --print-address 2>/dev/null || true)"
+  export DBUS_SESSION_BUS_ADDRESS
+fi
+
+xsetroot -solid "#1e1e2e" 2>/dev/null || true
+
+if [ -x /usr/bin/xclock ]; then
+  xclock -digital -geometry 140x24+12+8 -bg "#313244" -fg "#cdd6f4" &
+fi
+
+if [ -x /usr/bin/xterm ]; then
+  /usr/bin/xterm -geometry 114x30+48+40 -bg "#1e1e2e" -fg "#cdd6f4" \
+    -title "Terminal" -e /usr/bin/bash &
+fi
+
+if [ -x /usr/bin/thunar ]; then
+  thunar --daemon &
+fi
+
+if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -x /usr/bin/xfconfd ]; then
+  xfconfd &
+  sleep 1
+fi
+
+if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -x /usr/bin/xfce4-panel ]; then
+  xfce4-panel &
+fi

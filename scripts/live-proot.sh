@@ -42,6 +42,18 @@ push_host() {
   fi
 }
 
+push_tree() {
+  local src_dir="$1"
+  local dest_rel="$2"
+  local tarball
+  tarball=$(mktemp /tmp/guest-tree.XXXXXX.tgz)
+  trap 'rm -f "$tarball"' RETURN
+  tar czf "$tarball" -C "$src_dir" .
+  run_as "mkdir -p files/tmp '$dest_rel'"
+  adb shell "run-as $PKG sh -c 'cat > files/tmp/guest-tree.tgz'" <"$tarball"
+  run_as "tar xzf files/tmp/guest-tree.tgz -C '$dest_rel' && rm -f files/tmp/guest-tree.tgz"
+}
+
 # Build a proot launcher on device (same pattern as ProotProcessLauncher).
 launch_proot() {
   local guest_argv="$1"
@@ -112,10 +124,20 @@ EOF
     ;;
 
   push-desktop)
-    script="${2:-$ROOT/app/src/main/assets/desktop/start-desktop-vnc.sh}"
+    script="${2:-$ROOT/app/src/main/assets/desktop/start-desktop-x11.sh}"
     echo "Pushing $script -> files/rootfs/start-desktop.sh"
     push_host "$script" "files/rootfs/start-desktop.sh"
     run_as "head -20 files/rootfs/start-desktop.sh"
+    ;;
+
+  push-guest)
+    echo "Pushing guest-bin -> files/rootfs"
+    push_tree "$ROOT/app/src/main/assets/desktop/guest-bin" "files/rootfs"
+    echo "Pushing cowork-config -> files/rootfs/usr/share/proot-cowork"
+    push_tree "$ROOT/app/src/main/assets/desktop/cowork-config" "files/rootfs/usr/share/proot-cowork"
+    run_as "chmod +x files/rootfs/usr/bin/xterm files/rootfs/usr/bin/start-cowork-xfce files/rootfs/usr/bin/openbox files/rootfs/usr/bin/openbox-session files/rootfs/usr/bin/cowork-bwrap files/rootfs/usr/bin/cowork-dbus-launch 2>/dev/null || true"
+    run_as "chmod +x files/rootfs/usr/share/proot-cowork/.config/openbox/autostart 2>/dev/null || true"
+    run_as "ls -la files/rootfs/usr/bin/openbox files/rootfs/usr/bin/openbox-session files/rootfs/usr/share/proot-cowork/.config/openbox/autostart"
     ;;
 
   push-shim)
@@ -190,6 +212,7 @@ Live proot debug (no APK rebuild for guest-side changes)
 
   paths                 Print discovered device paths
   push-desktop [file]   Push start-desktop script into rootfs
+  push-guest            Push openbox/xterm + cowork openbox config into rootfs
   push-shim [file]      Push libcowork_linkshim.so to app exec_libs
   guest <cmd>           Run shell command inside proot (live launcher)
   desktop               Start /start-desktop.sh in background
@@ -201,6 +224,7 @@ Live proot debug (no APK rebuild for guest-side changes)
 Examples:
   ./scripts/live-proot.sh import
   ./scripts/live-proot.sh push-desktop
+  ./scripts/live-proot.sh push-guest
   ./scripts/live-proot.sh test-xvfb
   ./scripts/live-proot.sh guest 'echo PROOT_OK; ls /usr/lib/libcowork*'
   ./scripts/live-proot.sh desktop-fg

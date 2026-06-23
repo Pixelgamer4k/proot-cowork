@@ -1,0 +1,4 @@
+export GDK_PIXBUF_DISABLE_GLYCIN=1
+export GTK_USE_PORTAL=0
+export NO_AT_BRIDGE=1
+export GTK_ICON_THEME_NAME=HighContrast

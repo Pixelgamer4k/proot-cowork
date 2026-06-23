@@ -1,0 +1,42 @@
+#!/usr/bin/bash
+# Full XFCE session entry — Xvfb is already running on $DISPLAY.
+export GDK_PIXBUF_DISABLE_GLYCIN=1
+export GTK_USE_PORTAL=0
+export NO_AT_BRIDGE=1
+export GDK_BACKEND=x11
+export GTK_ICON_THEME_NAME=HighContrast
+export XDG_CURRENT_DESKTOP=XFCE
+export DESKTOP_SESSION=xfce
+export XDG_MENU_PREFIX=xfce-
+export LANG="${LANG:-C.UTF-8}"
+
+export HOME="${HOME:-/home/cowork}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/cowork-runtime}"
+mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -x /usr/bin/dbus-daemon ]; then
+  mkdir -p "$XDG_RUNTIME_DIR"
+  chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+  if dbus-daemon --session --fork --nopidfile \
+    --address="unix:path=${XDG_RUNTIME_DIR}/bus" 2>/dev/null; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+  fi
+fi
+
+if [ -f /usr/lib/libcowork_gtkshim.so ]; then
+  export LD_PRELOAD="/usr/lib/libcowork_gtkshim.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+
+if [ -x /usr/bin/xfce4-session ]; then
+  exec /usr/bin/xfce4-session
+fi
+
+if [ -x /usr/bin/startxfce4 ]; then
+  exec /usr/bin/startxfce4
+fi
+
+echo "No XFCE session binary found" >&2
+exit 1

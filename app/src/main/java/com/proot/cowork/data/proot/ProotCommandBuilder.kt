@@ -2,6 +2,8 @@ package com.proot.cowork.data.proot
 
 import android.content.Context
 import android.os.Build
+import com.proot.cowork.BuildConfig
+import com.proot.cowork.data.termux.TermuxBootstrap
 import java.io.File
 
 object ProotCommandBuilder {
@@ -35,8 +37,14 @@ object ProotCommandBuilder {
         put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
         put("TERM", "xterm-256color")
         put("TMPDIR", "/tmp")
-        put("XDG_RUNTIME_DIR", "/tmp")
-        put("VNC_PORT", "5900")
+        put("XDG_RUNTIME_DIR", "/tmp/cowork-runtime")
+        if (BuildConfig.USE_TERMUX_X11) {
+            put("DISPLAY", ":0")
+        } else {
+            put("DISPLAY", ":99")
+            put("VNC_PORT", "5900")
+        }
+        putAll(TermuxBootstrap.termuxEnv(context))
     }
 
     fun buildStartDesktop(

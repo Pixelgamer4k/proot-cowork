@@ -35,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
+import com.proot.cowork.BuildConfig
 import com.proot.cowork.domain.proot.DesktopState
 
 @Composable
@@ -165,17 +166,25 @@ private fun StartingContent() {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         CircularProgressIndicator()
         Spacer(modifier = Modifier.height(12.dp))
-        Text("Booting proot + VNC desktop…")
+        Text("Booting proot + ${if (BuildConfig.USE_TERMUX_X11) "Termux:X11" else "VNC"} desktop…")
     }
 }
 
 @Composable
 private fun RunningDesktopContent() {
-    VncDesktopView(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-    )
+    if (BuildConfig.USE_TERMUX_X11) {
+        X11DesktopView(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        )
+    } else {
+        VncDesktopView(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        )
+    }
 }
 
 @Composable

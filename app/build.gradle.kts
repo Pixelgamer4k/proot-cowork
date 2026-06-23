@@ -12,8 +12,10 @@ android {
         applicationId = "com.proot.cowork"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.4.16-vnc"
+        versionCode = 2
+        versionName = "0.5.0-termux"
+
+        buildConfigField("boolean", "USE_TERMUX_X11", "true")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -88,6 +90,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+
+    implementation(project(":termux-x11"))
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

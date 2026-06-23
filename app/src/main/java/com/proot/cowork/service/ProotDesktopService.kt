@@ -16,6 +16,10 @@ import com.proot.cowork.data.proot.ProotCommandBuilder
 import com.proot.cowork.data.proot.ProotProcessLauncher
 import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.rootfs.RootfsValidator
+import com.proot.cowork.BuildConfig
+import com.proot.cowork.data.x11.X11ConnectionManager
+import com.proot.cowork.data.x11.X11Readiness
+import com.proot.cowork.data.termux.TermuxBootstrap
 import com.proot.cowork.data.vnc.VncReadiness
 import com.proot.cowork.debug.DebugStatusWriter
 import com.proot.cowork.domain.proot.DesktopSession
@@ -28,6 +32,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
@@ -79,9 +84,20 @@ class ProotDesktopService : Service() {
         }
 
         RootfsValidator.repairLayout(rootfs)
-        RootfsValidator.ensureVncStartScript(applicationContext, rootfs)
+        RootfsValidator.repairLayout(rootfs)
+        RootfsValidator.ensureStartScript(applicationContext, rootfs)
 
-        if (!RootfsValidator.hasVncStack(rootfs)) {
+        if (BuildConfig.USE_TERMUX_X11) {
+            if (!RootfsValidator.hasXfceStack(rootfs)) {
+                DesktopSession.appendLog(
+                    "Rootfs missing startxfce4/xfce4-session. Rebuild with rootfs-setup/04-xfce-install.sh",
+                )
+                DesktopSession.setState(DesktopState.STOPPED)
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return
+            }
+        } else if (!RootfsValidator.hasVncStack(rootfs)) {
             DesktopSession.appendLog(
                 "Rootfs missing xvfb/x11vnc. Rebuild with: apt install -y xvfb x11vnc xfce4",
             )
@@ -99,13 +115,28 @@ class ProotDesktopService : Service() {
         desktopJob = scope.launch {
             val logLines = Channel<String>(capacity = Channel.UNLIMITED)
             try {
+                TermuxBootstrap.ensureInstalled(applicationContext)
+
                 val runtime = RuntimeBootstrap(applicationContext).ensureRuntime()
+
+                if (BuildConfig.USE_TERMUX_X11) {
+                    X11ConnectionManager.ensureServer(applicationContext)
+                    updateNotification("Starting Termux:X11…")
+                    if (!X11Readiness.awaitSocket(runtime.tmpDir, display = 0)) {
+                        DesktopSession.setState(DesktopState.STOPPED)
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                        return@launch
+                    }
+                }
+
                 val command = ProotCommandBuilder.buildStartDesktop(
                     context = applicationContext,
                     runtime = runtime,
                     rootfsDir = rootfs,
                 )
-                DesktopSession.appendLog("Starting proot (VNC desktop)")
+                val modeLabel = if (BuildConfig.USE_TERMUX_X11) "Termux:X11" else "VNC"
+                DesktopSession.appendLog("Starting proot ($modeLabel desktop)")
                 DebugStatusWriter.writeProotCommand(applicationContext, command)
 
                 val env = ProotCommandBuilder.launchEnvironment(applicationContext, runtime)
@@ -121,12 +152,24 @@ class ProotDesktopService : Service() {
                     streamLogs(process, logLines)
                 }
 
-                updateNotification("Waiting for VNC…")
-                val ready = VncReadiness.awaitReady(logLines = logLines)
+                updateNotification(
+                    if (BuildConfig.USE_TERMUX_X11) "Starting XFCE session…" else "Waiting for VNC…",
+                )
+                val ready = if (BuildConfig.USE_TERMUX_X11) {
+                    delay(20_000)
+                    true
+                } else {
+                    VncReadiness.awaitReady(logLines = logLines)
+                }
 
                 if (!ready) {
                     val tail = DesktopSession.logLines.value.takeLast(5).joinToString(" | ")
-                    DesktopSession.appendLog("Timed out waiting for VNC on 127.0.0.1:5900")
+                    val msg = if (BuildConfig.USE_TERMUX_X11) {
+                        "Timed out waiting for X11 on :0"
+                    } else {
+                        "Timed out waiting for VNC on 127.0.0.1:5900"
+                    }
+                    DesktopSession.appendLog(msg)
                     if (tail.isNotBlank()) {
                         DesktopSession.appendLog("Last proot output: $tail")
                     }
@@ -136,10 +179,18 @@ class ProotDesktopService : Service() {
                     return@launch
                 }
 
-                DesktopSession.appendLog("VNC ready on port 5900")
+                DesktopSession.appendLog(
+                    if (BuildConfig.USE_TERMUX_X11) "X11 ready on :0" else "VNC ready on port 5900",
+                )
                 DesktopSession.setState(DesktopState.RUNNING)
                 DebugStatusWriter.refresh(applicationContext)
-                updateNotification("Linux desktop running (VNC)")
+                updateNotification(
+                    if (BuildConfig.USE_TERMUX_X11) {
+                        "Linux desktop running (Termux:X11)"
+                    } else {
+                        "Linux desktop running (VNC)"
+                    },
+                )
 
                 val exit = process.waitFor()
                 DesktopSession.appendLog("proot exited with code $exit")
@@ -194,7 +245,10 @@ class ProotDesktopService : Service() {
         desktopJob = null
         prootProcess?.destroy()
         prootProcess = null
-        VncSession.disconnect()
+        if (!BuildConfig.USE_TERMUX_X11) {
+            VncSession.disconnect()
+        }
+        X11ConnectionManager.reset()
         DesktopSession.setState(DesktopState.STOPPED)
     }
 

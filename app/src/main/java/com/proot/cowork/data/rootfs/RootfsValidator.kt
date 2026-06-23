@@ -32,12 +32,26 @@ object RootfsValidator {
             resolveGuestBinary(rootfsDir, "x11vnc") != null
     }
 
+    fun hasXfceStack(rootfsDir: File): Boolean {
+        repairLayout(rootfsDir)
+        return resolveGuestBinary(rootfsDir, "startxfce4") != null ||
+            resolveGuestBinary(rootfsDir, "xfce4-session") != null
+    }
+
+    fun ensureStartScript(context: Context, rootfsDir: File) {
+        if (BuildConfig.USE_TERMUX_X11) {
+            ensureX11StartScript(context, rootfsDir)
+        } else {
+            ensureVncStartScript(context, rootfsDir)
+        }
+    }
+
     fun ensureVncStartScript(context: Context, rootfsDir: File) {
         val out = File(rootfsDir, "start-desktop.sh")
         val liveOverride = File(context.filesDir, "debug/live-desktop-script")
         if (BuildConfig.DEBUG && liveOverride.isFile && out.isFile) {
             out.setExecutable(true, false)
-            ensureGuestBinaries(context, rootfsDir)
+            ensureGuestPayload(context, rootfsDir)
             return
         }
 
@@ -46,26 +60,70 @@ object RootfsValidator {
             .use { it.readText() }
         out.writeText(script)
         out.setExecutable(true, false)
-        ensureGuestBinaries(context, rootfsDir)
+        ensureGuestPayload(context, rootfsDir)
     }
 
-    private fun ensureGuestBinaries(context: Context, rootfsDir: File) {
-        val assetRoot = "desktop/guest-bin"
-        val xtermDest = File(rootfsDir, "usr/bin/xterm")
-        if (!xtermDest.isFile || xtermDest.length() == 0L) {
-            copyAssetFile(context, "$assetRoot/usr/bin/xterm", xtermDest)
-            xtermDest.setExecutable(true, false)
+    fun ensureX11StartScript(context: Context, rootfsDir: File) {
+        val out = File(rootfsDir, "start-desktop.sh")
+        val liveOverride = File(context.filesDir, "debug/live-desktop-script")
+        if (BuildConfig.DEBUG && liveOverride.isFile && out.isFile) {
+            out.setExecutable(true, false)
+            ensureGuestPayload(context, rootfsDir)
+            return
         }
-        val utempterDest = File(rootfsDir, "usr/lib/aarch64-linux-gnu/libutempter.so.0")
-        if (!utempterDest.isFile || utempterDest.length() == 0L) {
-            utempterDest.parentFile?.mkdirs()
-            copyAssetFile(context, "$assetRoot/usr/lib/aarch64-linux-gnu/libutempter.so.0", utempterDest)
+
+        val script = context.assets.open("desktop/start-desktop-x11.sh")
+            .bufferedReader()
+            .use { it.readText() }
+        out.writeText(script)
+        out.setExecutable(true, false)
+        ensureGuestPayload(context, rootfsDir)
+    }
+
+    private fun ensureGuestPayload(context: Context, rootfsDir: File) {
+        copyAssetTree(context, "desktop/guest-bin", rootfsDir)
+        copyAssetTree(
+            context,
+            "desktop/cowork-config",
+            File(rootfsDir, "usr/share/proot-cowork"),
+        )
+        markExecutableGuests(rootfsDir)
+    }
+
+    private fun markExecutableGuests(rootfsDir: File) {
+        listOf(
+            "usr/bin/xterm",
+            "usr/bin/start-cowork-xfce",
+            "usr/bin/openbox",
+            "usr/bin/openbox-session",
+            "usr/bin/cowork-bwrap",
+            "usr/bin/cowork-dbus-launch",
+            "usr/bin/obxprop",
+            "usr/lib/aarch64-linux-gnu/utempter/utempter",
+        ).forEach { rel ->
+            File(rootfsDir, rel).takeIf { it.isFile }?.setExecutable(true, false)
         }
     }
 
-    private fun copyAssetFile(context: Context, assetPath: String, dest: File) {
-        context.assets.open(assetPath).use { input ->
-            dest.outputStream().use { output -> input.copyTo(output) }
+    private fun copyAssetTree(context: Context, assetPath: String, destRoot: File) {
+        val children = context.assets.list(assetPath) ?: return
+        val relativePath = when {
+            assetPath == "desktop/guest-bin" || assetPath == "desktop/cowork-config" -> ""
+            assetPath.startsWith("desktop/guest-bin/") -> assetPath.removePrefix("desktop/guest-bin/")
+            assetPath.startsWith("desktop/cowork-config/") -> assetPath.removePrefix("desktop/cowork-config/")
+            else -> return
+        }
+        val dest = if (relativePath.isEmpty()) destRoot else File(destRoot, relativePath)
+        if (children.isEmpty()) {
+            dest.parentFile?.mkdirs()
+            context.assets.open(assetPath).use { input ->
+                dest.outputStream().use { output -> input.copyTo(output) }
+            }
+            return
+        }
+        dest.mkdirs()
+        for (child in children) {
+            copyAssetTree(context, "$assetPath/$child", destRoot)
         }
     }
 

@@ -1,6 +1,7 @@
 package com.proot.cowork.data.rootfs
 
 import android.content.Context
+import com.proot.cowork.BuildConfig
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -32,13 +33,22 @@ object RootfsValidator {
     }
 
     fun ensureVncStartScript(context: Context, rootfsDir: File) {
+        val out = File(rootfsDir, "start-desktop.sh")
+        val liveOverride = File(context.filesDir, "debug/live-desktop-script")
+        if (BuildConfig.DEBUG && liveOverride.isFile && out.isFile) {
+            out.setExecutable(true, false)
+            return
+        }
+
         val script = context.assets.open("desktop/start-desktop-vnc.sh")
             .bufferedReader()
             .use { it.readText() }
-        val out = File(rootfsDir, "start-desktop.sh")
         out.writeText(script)
         out.setExecutable(true, false)
     }
+
+    fun liveDesktopScriptMarker(context: Context): File =
+        File(context.filesDir, "debug/live-desktop-script")
 
     fun resolveGuestBinary(rootfsDir: File, name: String): File? {
         val candidates = listOf(

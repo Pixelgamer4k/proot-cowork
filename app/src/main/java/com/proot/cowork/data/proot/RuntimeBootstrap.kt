@@ -20,8 +20,12 @@ class RuntimeBootstrap(private val context: Context) {
         ensureVersionedTalloc(nativeLibDir, supportLibDir)
         ensureProotLoaders(nativeLibDir, supportLibDir)
 
-        val ldLibraryPath = listOf(nativeLibDir, supportLibDir)
-            .joinToString(":") { it.absolutePath }
+        val ldLibraryPath = listOf(
+            "/system/lib64",
+            "/system/lib",
+            nativeLibDir,
+            supportLibDir,
+        ).joinToString(":")
 
         val nativeLoader = File(nativeLibDir, LOADER_JNI_NAME)
         val nativeLoader32 = File(nativeLibDir, LOADER32_JNI_NAME)

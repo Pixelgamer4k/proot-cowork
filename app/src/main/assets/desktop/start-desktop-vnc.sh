@@ -9,19 +9,9 @@ export DISPLAY=:99
 export XDG_RUNTIME_DIR=/tmp
 export TMPDIR=/tmp
 
-# Termux-style preload: Android shm + link() shim for Xvfb lock files under proot.
-_guest_preload=""
-for lib in /usr/lib/libcowork_linkshim.so /usr/lib/libandroid-shmem.so; do
-  if [ -f "$lib" ]; then
-    _guest_preload="${_guest_preload:+$_guest_preload:}$lib"
-  fi
-done
-if [ -n "$_guest_preload" ]; then
-  export LD_PRELOAD="$_guest_preload${LD_PRELOAD:+:$LD_PRELOAD}"
-fi
-
 mkdir -p /tmp/.X11-unix
-chmod 1777 /tmp /tmp/.X11-unix 2>/dev/null || true
+chmod 1777 /tmp 2>/dev/null || true
+chmod 700 /tmp/.X11-unix 2>/dev/null || true
 rm -f /tmp/.X*-lock
 
 VNC_PORT="${VNC_PORT:-5900}"
@@ -55,15 +45,39 @@ if [ ! -S /tmp/.X11-unix/X99 ]; then
   exit 1
 fi
 
-# -noshm avoids proot shm-helper exec errors on Android; -ipv4 skips broken IPv6 bind.
+vnc_listening() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn 2>/dev/null | grep -q ":${VNC_PORT} "
+    return
+  fi
+  (echo >/dev/tcp/127.0.0.1/"$VNC_PORT") >/dev/null 2>&1
+}
+
+# -noshm avoids proot shm-helper exec errors on Android.
 "$X11VNC" -display :99 -localhost -nopw -forever -shared -rfbport "$VNC_PORT" \
-  -ipv4 -noshm -noxdamage -noxrecord -noxfixes -noxkb -wait 50 &
-sleep 1
+  -noshm -noxdamage -noxrecord -noxfixes -noxkb -wait 50 &
+X11VNC_PID=$!
+for _ in $(seq 1 30); do
+  if vnc_listening; then
+    break
+  fi
+  if ! kill -0 "$X11VNC_PID" 2>/dev/null; then
+    echo "x11vnc failed to start"
+    exit 1
+  fi
+  sleep 0.2
+done
+
+if ! vnc_listening; then
+  echo "VNC port $VNC_PORT not listening"
+  exit 1
+fi
 
 echo "VNC_READY port=$VNC_PORT display=:99"
 
 cleanup() {
   kill "$XVFB_PID" 2>/dev/null || true
+  kill "$X11VNC_PID" 2>/dev/null || true
   pkill -f "x11vnc.*:99" 2>/dev/null || true
 }
 trap cleanup EXIT

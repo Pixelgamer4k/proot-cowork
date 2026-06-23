@@ -77,6 +77,8 @@ Usage: $(basename "$0") <command> [args]
   logcat [n]          Filtered logcat
 
 Package: $PKG
+
+Live iteration (no APK rebuild): ./scripts/live-proot.sh help
 EOF
     ;;
 esac

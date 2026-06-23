@@ -45,7 +45,7 @@ object ProotCommandBuilder {
         rootfsDir: File,
     ): List<String> {
         val tmp = runtime.tmpDir
-        tmp.mkdirs()
+        ensureSharedTmp(tmp)
 
         val sysdataDir = File(context.filesDir, "sysdata")
         ProotSysdata.ensure(sysdataDir)
@@ -69,16 +69,19 @@ object ProotCommandBuilder {
     }
 
     fun buildShell(
+        context: Context,
         runtime: ProotRuntime,
         rootfsDir: File,
         command: String,
     ): List<String> {
         val tmp = runtime.tmpDir
+        ensureSharedTmp(tmp)
+
         val sysdataDir = File(tmp.parentFile, "sysdata")
         ProotSysdata.ensure(sysdataDir)
 
         val bindings = buildAndroidBindings(
-            context = null,
+            context = context,
             runtime = runtime,
             rootfsDir = rootfsDir,
             tmpDir = tmp,
@@ -102,9 +105,23 @@ object ProotCommandBuilder {
         return runtime.launchCommand(prootArgs)
     }
 
+    fun ensureSharedTmp(tmpDir: File) {
+        tmpDir.mkdirs()
+        File(tmpDir, ".X11-unix").mkdirs()
+    }
+
+    fun guestPreloadLibraries(context: Context): List<String> {
+        val nativeLibDir = File(context.applicationInfo.nativeLibraryDir)
+        return listOf(
+            File(nativeLibDir, "libcowork_linkshim.so"),
+            File(nativeLibDir, "libandroid-shmem.so"),
+        ).filter { it.isFile }.map { it.absolutePath }
+    }
+
     private fun appendProotExtensions(args: MutableList<String>) {
         args += "--kill-on-exit"
         args += "--link2symlink"
+        args += "--sysvipc"
         args += "-L"
         val hostname = Build.MODEL.ifBlank { "cowork" }
             .replace(Regex("[^A-Za-z0-9._-]"), "-")
@@ -124,10 +141,25 @@ object ProotCommandBuilder {
             "/proc",
             "/sys",
             "/dev/urandom:/dev/random",
-            // Keep guest /tmp inside rootfs — binding host app-data tmp breaks hard links
-            // (Xvfb lock files use link(); Android returns ENOSYS on app-data paths).
+            // Termux --shared-tmp: host tmp (with link2symlink .l2s) backs guest /tmp.
+            "${tmpDir.absolutePath}:/tmp",
+            "${tmpDir.absolutePath}:/dev/shm",
             "${File(sysdataDir, "sys_empty").absolutePath}:/sys/fs/selinux",
         )
+
+        context?.let { ctx ->
+            val nativeLibDir = File(ctx.applicationInfo.nativeLibraryDir)
+            val guestLibs = listOf(
+                "libcowork_linkshim.so",
+                "libandroid-shmem.so",
+            )
+            guestLibs.forEach { name ->
+                val lib = File(nativeLibDir, name)
+                if (lib.isFile) {
+                    bindings += "${lib.absolutePath}:/usr/lib/$name"
+                }
+            }
+        }
 
         if (File("/apex").isDirectory) {
             bindings += "/apex:/apex"

@@ -143,7 +143,7 @@ object DebugBridge {
             }
             try {
                 val runtime = RuntimeBootstrap(context).ensureRuntime()
-                val command = ProotCommandBuilder.buildShell(runtime, rootfs, shellCommand)
+                val command = ProotCommandBuilder.buildShell(context, runtime, rootfs, shellCommand)
                 DebugStatusWriter.writeProotCommand(context, command)
                 DebugStatusWriter.clearProotLog(context)
                 val env = ProotCommandBuilder.launchEnvironment(context, runtime)

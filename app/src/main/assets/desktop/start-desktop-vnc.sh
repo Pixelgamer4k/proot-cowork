@@ -9,9 +9,19 @@ export DISPLAY=:99
 export XDG_RUNTIME_DIR=/tmp
 export TMPDIR=/tmp
 
-# Guest /tmp must live inside rootfs (not host app-data bind) for X lock hard links.
+# Termux-style preload: Android shm + link() shim for Xvfb lock files under proot.
+_guest_preload=""
+for lib in /usr/lib/libcowork_linkshim.so /usr/lib/libandroid-shmem.so; do
+  if [ -f "$lib" ]; then
+    _guest_preload="${_guest_preload:+$_guest_preload:}$lib"
+  fi
+done
+if [ -n "$_guest_preload" ]; then
+  export LD_PRELOAD="$_guest_preload${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+
 mkdir -p /tmp/.X11-unix
-chmod 1777 /tmp /tmp/.X11-unix
+chmod 1777 /tmp /tmp/.X11-unix 2>/dev/null || true
 rm -f /tmp/.X*-lock
 
 VNC_PORT="${VNC_PORT:-5900}"
@@ -31,12 +41,17 @@ pkill -x Xvfb 2>/dev/null || true
 pkill -f "x11vnc.*:99" 2>/dev/null || true
 sleep 0.5
 
-"$XVFB" :99 -screen 0 "$SCREEN" -ac +extension GLX +render -noreset &
+"$XVFB" :99 -screen 0 "$SCREEN" -ac +extension GLX +render -noreset -extension MIT-SHM &
 XVFB_PID=$!
-sleep 1
+sleep 2
 
 if ! kill -0 "$XVFB_PID" 2>/dev/null; then
   echo "Xvfb failed to start"
+  exit 1
+fi
+
+if [ ! -S /tmp/.X11-unix/X99 ]; then
+  echo "X display socket missing at /tmp/.X11-unix/X99"
   exit 1
 fi
 

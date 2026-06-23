@@ -1,0 +1,42 @@
+---
+description: Never run heavy local builds or device ops; use GitHub Actions only
+alwaysApply: true
+---
+
+# CI-only builds — protect the host machine
+
+This project is built and tested on **GitHub Actions**, not on the developer's local PC.
+
+## Never run locally (unless the user explicitly asks in that message)
+
+- `./gradlew`, `gradle`, `assembleDebug`, `compileDebugKotlin`, or any Android NDK/CMake build
+- `gh run watch` or any command that blocks for minutes polling CI
+- `sudo apt-get install` for JDK/SDK/toolchains
+- Cloning large deps (`termux-x11` submodules, 100MB+ bootstrap zips)
+- Long-running background shells (`block_until_ms` > 60s for build/watch tasks)
+- `adb install` / pushing APKs to the user's phone without explicit request
+
+Local ARM hosts also lack working x86 `aapt2` — local Gradle often fails and wastes RAM.
+
+## Do instead
+
+1. **Edit code** and push to `main` (or tell the user to push).
+2. **Trigger CI** only with a short command: `gh workflow run build-debug-apk.yml` (no watch).
+3. **Report** the Actions run URL and artifact name: `proot-cowork-debug-apk`.
+4. **Verify** with read-only checks when needed: `gh run list --limit 3`, `git status`, read logs in the Actions UI.
+
+## Device / adb (only if user explicitly asks)
+
+- Quick read-only: `adb logcat -d`, `run-as … cat files/debug/status.json`
+- No reboot loops, no repeated install/uninstall cycles without permission
+
+## APK delivery template
+
+After pushing, give the user:
+
+```bash
+gh run list --workflow=build-debug-apk.yml --limit 1
+gh run download <run-id> -n proot-cowork-debug-apk -D /tmp/
+```
+
+User installs on their device themselves unless they ask the agent to `adb install`.

@@ -22,10 +22,12 @@ class RfbClient(
     var height: Int = 0
         private set
 
+    private var bitsPerPixel = 32
+    private var bytesPerPixel = 4
+    private var bigEndian = false
     private var redShift = 16
     private var greenShift = 8
     private var blueShift = 0
-    private var bytesPerPixel = 4
 
     val isConnected: Boolean
         get() = socket?.isConnected == true && socket?.isClosed == false
@@ -34,6 +36,7 @@ class RfbClient(
         disconnect()
         val sock = Socket()
         sock.tcpNoDelay = true
+        sock.soTimeout = 30_000
         sock.connect(InetSocketAddress(host, port), VncConfig.CONNECT_TIMEOUT_MS)
         socket = sock
         input = DataInputStream(sock.getInputStream())
@@ -154,9 +157,10 @@ class RfbClient(
     }
 
     private fun readPixelFormat(inp: DataInputStream) {
-        bytesPerPixel = inp.readUnsignedByte()
+        bitsPerPixel = inp.readUnsignedByte()
+        bytesPerPixel = ((bitsPerPixel + 7) / 8).coerceIn(1, 4)
         inp.readUnsignedByte() // depth
-        inp.readUnsignedByte() // big endian
+        bigEndian = inp.readUnsignedByte() != 0
         inp.readUnsignedByte() // true color
         inp.readUnsignedShort() // red max
         inp.readUnsignedShort() // green max
@@ -196,8 +200,9 @@ class RfbClient(
             for (col in 0 until w) {
                 val offset = col * bytesPerPixel
                 pixels[col] = when (bytesPerPixel) {
-                    4 -> argbFrom32(readIntBE(row, offset))
+                    4 -> argbFrom32(readPixel32(row, offset))
                     3 -> argbFrom24(row[offset].toInt() and 0xFF, row[offset + 1].toInt() and 0xFF, row[offset + 2].toInt() and 0xFF)
+                    2 -> argbFrom16(readPixel16(row, offset))
                     else -> 0xFF000000.toInt()
                 }
             }
@@ -231,11 +236,36 @@ class RfbClient(
     private fun argbFrom24(r: Int, g: Int, b: Int): Int =
         0xFF000000.toInt() or (r shl 16) or (g shl 8) or b
 
+    private fun readPixel32(buf: ByteArray, offset: Int): Int =
+        if (bigEndian) readIntBE(buf, offset) else readIntLE(buf, offset)
+
+    private fun readPixel16(buf: ByteArray, offset: Int): Int {
+        val value = if (bigEndian) {
+            ((buf[offset].toInt() and 0xFF) shl 8) or (buf[offset + 1].toInt() and 0xFF)
+        } else {
+            (buf[offset].toInt() and 0xFF) or ((buf[offset + 1].toInt() and 0xFF) shl 8)
+        }
+        return value
+    }
+
+    private fun argbFrom16(pixel: Int): Int {
+        val r = ((pixel shr redShift) and 0xFF)
+        val g = ((pixel shr greenShift) and 0xFF)
+        val b = ((pixel shr blueShift) and 0xFF)
+        return 0xFF000000.toInt() or (r shl 16) or (g shl 8) or b
+    }
+
     private fun readIntBE(buf: ByteArray, offset: Int): Int =
         ((buf[offset].toInt() and 0xFF) shl 24) or
             ((buf[offset + 1].toInt() and 0xFF) shl 16) or
             ((buf[offset + 2].toInt() and 0xFF) shl 8) or
             (buf[offset + 3].toInt() and 0xFF)
+
+    private fun readIntLE(buf: ByteArray, offset: Int): Int =
+        (buf[offset].toInt() and 0xFF) or
+            ((buf[offset + 1].toInt() and 0xFF) shl 8) or
+            ((buf[offset + 2].toInt() and 0xFF) shl 16) or
+            ((buf[offset + 3].toInt() and 0xFF) shl 24)
 
     private fun skipColourMap(inp: DataInputStream) {
         inp.readUnsignedByte()

@@ -46,11 +46,9 @@ case "${1:-help}" in
     if [[ -z "$path" ]]; then
       adb shell "test -f $drop_dir/$rootfs_name || cp /sdcard/$rootfs_name $drop_dir/"
       adb shell chmod 644 "$drop_dir/$rootfs_name" 2>/dev/null || true
-      adb shell am start -n "${PKG}/com.proot.cowork.MainActivity" >/dev/null 2>&1 || true
       sleep 1
       broadcast IMPORT_ROOTFS
     else
-      adb shell am start -n "${PKG}/com.proot.cowork.MainActivity" >/dev/null 2>&1 || true
       sleep 1
       broadcast IMPORT_ROOTFS --es path "$path"
     fi

@@ -162,7 +162,11 @@ private fun NoRootfsContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = stringResource(R.string.add_rootfs_hint, dropDirectoryLabel),
+            text = stringResource(
+                R.string.add_rootfs_hint,
+                dropDirectoryLabel,
+                com.proot.cowork.data.rootfs.RootfsTarballLocator.DEFAULT_FILENAME,
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

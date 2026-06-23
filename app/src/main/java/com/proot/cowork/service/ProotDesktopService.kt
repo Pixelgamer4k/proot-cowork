@@ -25,10 +25,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
+import java.io.InterruptedIOException
 import java.io.InputStreamReader
 
 class ProotDesktopService : Service() {
@@ -36,6 +39,7 @@ class ProotDesktopService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var prootProcess: Process? = null
     private var logJob: Job? = null
+    private var desktopJob: Job? = null
     private lateinit var settingsRepository: SettingsRepository
 
     override fun onCreate() {
@@ -58,6 +62,13 @@ class ProotDesktopService : Service() {
     }
 
     private fun startDesktop() {
+        if (prootProcess?.isAlive == true) {
+            DesktopSession.setState(DesktopState.RUNNING)
+            updateNotification("Linux desktop running (VNC)")
+            return
+        }
+        if (desktopJob?.isActive == true) return
+
         val rootfs = settingsRepository.getRootfsDir()
         if (!RootfsValidator.isValid(rootfs)) {
             DesktopSession.setState(DesktopState.NO_ROOTFS)
@@ -84,7 +95,7 @@ class ProotDesktopService : Service() {
         DebugStatusWriter.clearProotLog(applicationContext)
         updateNotification("Starting Linux desktop…")
 
-        scope.launch {
+        desktopJob = scope.launch {
             val logLines = Channel<String>(capacity = Channel.UNLIMITED)
             try {
                 val runtime = RuntimeBootstrap(applicationContext).ensureRuntime()
@@ -148,13 +159,23 @@ class ProotDesktopService : Service() {
     }
 
     private suspend fun streamLogs(process: Process, logLines: kotlinx.coroutines.channels.Channel<String>) {
-        BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-            var line = reader.readLine()
-            while (line != null) {
-                DesktopSession.appendLog(line)
-                DebugStatusWriter.appendProotLog(applicationContext, line)
-                logLines.trySend(line)
-                line = reader.readLine()
+        try {
+            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                var line = reader.readLine()
+                while (line != null && coroutineContext.isActive) {
+                    DesktopSession.appendLog(line)
+                    DebugStatusWriter.appendProotLog(applicationContext, line)
+                    logLines.trySend(line)
+                    line = reader.readLine()
+                }
+            }
+        } catch (_: InterruptedIOException) {
+            // Expected when proot is stopped while we are reading stdout.
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: java.io.IOException) {
+            if (coroutineContext.isActive && process.isAlive) {
+                DesktopSession.appendLog("Log stream ended: ${e.message}")
             }
         }
     }
@@ -167,6 +188,9 @@ class ProotDesktopService : Service() {
 
     private fun stopDesktopInternal() {
         logJob?.cancel()
+        logJob = null
+        desktopJob?.cancel()
+        desktopJob = null
         prootProcess?.destroy()
         prootProcess = null
         VncSession.disconnect()

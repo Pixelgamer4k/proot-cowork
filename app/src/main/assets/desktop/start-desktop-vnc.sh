@@ -92,14 +92,22 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-# XFCE needs dbus/bwrap which fail under app-launched proot; use a minimal WM instead.
+# Solid background instead of the default X crosshatch.
+if command -v xsetroot >/dev/null 2>&1; then
+  DISPLAY=:99 xsetroot -solid "#1e1e2e" 2>/dev/null || true
+fi
+
+# XFCE needs dbus/bwrap which fail under app-launched proot; prefer standalone WMs.
 WM=""
-for candidate in /usr/bin/openbox /usr/bin/fluxbox /usr/bin/xfwm4; do
+for candidate in /usr/bin/openbox /usr/bin/fluxbox; do
   if [ -x "$candidate" ]; then
     WM="$candidate"
     break
   fi
 done
+if [ -z "$WM" ] && [ -x /usr/bin/xfwm4 ]; then
+  WM=/usr/bin/xfwm4
+fi
 
 TERM_BIN=""
 for candidate in /usr/bin/xterm /usr/bin/x-terminal-emulator; do
@@ -110,16 +118,19 @@ for candidate in /usr/bin/xterm /usr/bin/x-terminal-emulator; do
 done
 
 set +e
+wm_pid=""
 if [ -n "$WM" ]; then
-  "$WM" &
+  DISPLAY=:99 "$WM" &
   wm_pid=$!
-  if [ -n "$TERM_BIN" ]; then
-    "$TERM_BIN" -maximized -fa "Monospace" -fs 12 2>/dev/null &
-  fi
-else
-  if [ -n "$TERM_BIN" ]; then
-    "$TERM_BIN" -maximized -fa "Monospace" -fs 12 2>/dev/null &
-  fi
+  sleep 1
+fi
+
+DISPLAY=:99 xsetroot -solid "#1e1e2e" 2>/dev/null || true
+
+if [ -n "$TERM_BIN" ]; then
+  DISPLAY=:99 "$TERM_BIN" -geometry 120x35+24+24 -fa Monospace -fs 14 \
+    -bg "#1e1e2e" -fg "#cdd6f4" -title "Proot Cowork" -e bash -l &
+  sleep 0.5
 fi
 set -e
 

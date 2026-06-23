@@ -51,7 +51,7 @@ fun VncDesktopView(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         when {
-            frame != null -> {
+            frame != null && connected -> {
                 val bitmap = frame!!
                 VncFrame(
                     bitmap = bitmap,

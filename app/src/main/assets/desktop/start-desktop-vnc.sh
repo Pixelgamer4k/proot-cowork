@@ -101,16 +101,24 @@ for candidate in /usr/bin/openbox /usr/bin/fluxbox /usr/bin/xfwm4; do
   fi
 done
 
+TERM_BIN=""
+for candidate in /usr/bin/xterm /usr/bin/x-terminal-emulator; do
+  if [ -x "$candidate" ]; then
+    TERM_BIN="$candidate"
+    break
+  fi
+done
+
 set +e
 if [ -n "$WM" ]; then
   "$WM" &
   wm_pid=$!
-  if command -v xterm >/dev/null 2>&1; then
-    xterm -maximized -fa "Monospace" -fs 12 &
+  if [ -n "$TERM_BIN" ]; then
+    "$TERM_BIN" -maximized -fa "Monospace" -fs 12 2>/dev/null &
   fi
 else
-  if command -v xterm >/dev/null 2>&1; then
-    xterm -maximized -fa "Monospace" -fs 12 &
+  if [ -n "$TERM_BIN" ]; then
+    "$TERM_BIN" -maximized -fa "Monospace" -fs 12 2>/dev/null &
   fi
 fi
 set -e

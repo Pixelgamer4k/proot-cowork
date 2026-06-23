@@ -35,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
+import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.domain.proot.DesktopState
 
 @Composable
@@ -94,7 +95,9 @@ fun DesktopPanel(
                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            when (desktopState) {
+            if (TERMUX_STACK_DESKTOP) {
+                TermuxStackPanel(modifier = Modifier.fillMaxSize())
+            } else when (desktopState) {
                 DesktopState.NO_ROOTFS -> NoRootfsContent(
                     dropDirectoryLabel = dropDirectoryLabel,
                     onImportDroppedFile = onImportDroppedFile,

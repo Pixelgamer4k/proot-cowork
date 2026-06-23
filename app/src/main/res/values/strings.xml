@@ -26,4 +26,10 @@
     <string name="rootfs_importing">Importing rootfs…</string>
     <string name="rootfs_ready">Rootfs ready</string>
     <string name="no_rootfs">No rootfs installed</string>
+    <string name="stack_show_x11">Show X11</string>
+    <string name="stack_show_termux">Show Termux</string>
+    <string name="stack_termux_booting">Starting Termux…</string>
+    <string name="stack_x11_booting">Starting X11…</string>
+    <string name="stack_termux_placeholder">Termux layer (terminal embed — next build)</string>
+    <string name="stack_x11_placeholder">X11 layer (LorieView embed — next build)</string>
 </resources>

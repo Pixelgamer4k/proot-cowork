@@ -17,7 +17,9 @@ object RootfsTarballLocator {
 
     /** Preferred directory for adb push / manual file drops (no SAF needed). */
     fun dropDirectory(context: Context): File =
-        context.getExternalFilesDir(null) ?: context.filesDir
+        appExternalDataDirs(context).firstOrNull()
+            ?: context.getExternalFilesDir(null)
+            ?: context.filesDir
 
     fun dropDirectoryLabel(context: Context): String = dropDirectory(context).absolutePath
 
@@ -32,8 +34,9 @@ object RootfsTarballLocator {
             candidates += pathAliases(pathHint)
         }
 
-        val dropDir = dropDirectory(context)
-        candidates += File(dropDir, name)
+        for (dir in appExternalDataDirs(context)) {
+            candidates += File(dir, name)
+        }
         candidates += File(context.filesDir, name)
         context.cacheDir?.let { candidates += File(it, name) }
 
@@ -42,6 +45,16 @@ object RootfsTarballLocator {
         }
 
         return candidates.firstOrNull { isReadableTarball(it) }
+    }
+
+    /** App-scoped external storage paths (work even when [Context.getExternalFilesDir] is null). */
+    private fun appExternalDataDirs(context: Context): List<File> {
+        val pkg = context.packageName
+        val dirs = linkedSetOf<File>()
+        context.getExternalFilesDir(null)?.let { dirs += it }
+        dirs += File("/storage/emulated/0/Android/data/$pkg/files")
+        dirs += File("/sdcard/Android/data/$pkg/files")
+        return dirs.toList()
     }
 
     fun isReadableTarball(file: File): Boolean {

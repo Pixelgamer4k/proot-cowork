@@ -37,6 +37,7 @@ object RootfsValidator {
         val liveOverride = File(context.filesDir, "debug/live-desktop-script")
         if (BuildConfig.DEBUG && liveOverride.isFile && out.isFile) {
             out.setExecutable(true, false)
+            ensureGuestBinaries(context, rootfsDir)
             return
         }
 
@@ -45,6 +46,27 @@ object RootfsValidator {
             .use { it.readText() }
         out.writeText(script)
         out.setExecutable(true, false)
+        ensureGuestBinaries(context, rootfsDir)
+    }
+
+    private fun ensureGuestBinaries(context: Context, rootfsDir: File) {
+        val assetRoot = "desktop/guest-bin"
+        val xtermDest = File(rootfsDir, "usr/bin/xterm")
+        if (!xtermDest.isFile || xtermDest.length() == 0L) {
+            copyAssetFile(context, "$assetRoot/usr/bin/xterm", xtermDest)
+            xtermDest.setExecutable(true, false)
+        }
+        val utempterDest = File(rootfsDir, "usr/lib/aarch64-linux-gnu/libutempter.so.0")
+        if (!utempterDest.isFile || utempterDest.length() == 0L) {
+            utempterDest.parentFile?.mkdirs()
+            copyAssetFile(context, "$assetRoot/usr/lib/aarch64-linux-gnu/libutempter.so.0", utempterDest)
+        }
+    }
+
+    private fun copyAssetFile(context: Context, assetPath: String, dest: File) {
+        context.assets.open(assetPath).use { input ->
+            dest.outputStream().use { output -> input.copyTo(output) }
+        }
     }
 
     fun liveDesktopScriptMarker(context: Context): File =

@@ -18,8 +18,10 @@ gh run list --workflow=build-debug-apk.yml --limit 1
 
 ## Desktop stack (current)
 
-- **v0.6.0-vnc**: UserLAnd-style — guest `Xvfb` + `x11vnc` + `startxfce4`, embedded VNC viewer in app
-- No Termux:X11, no kernel spoofing, no guest-bin shims in the start path
+- **v0.7.0-userland**: Vendored **UserLAnd backend** (`BusyboxExecutor`, `execInProot.sh`, `LocalServerManager`, tightvnc `:51` / port 5951)
+- Embedded RFB viewer (no external bVNC); VNC password `userland`
+- Rootfs at `files/1/`; guest needs `tightvncserver` + `xfce4` (see `rootfs-setup/04-xfce-install.sh`)
+- Runtime jni libs fetched in CI via `scripts/fetch-userland-runtime.sh` from UserLAnd v2.8.3 APK
 
 ## Device testing
 

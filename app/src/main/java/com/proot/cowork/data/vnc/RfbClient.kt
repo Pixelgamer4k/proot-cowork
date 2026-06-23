@@ -6,12 +6,16 @@ import java.io.DataOutputStream
 import java.io.EOFException
 import java.net.InetSocketAddress
 import java.net.Socket
+import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.DESKeySpec
 /**
  * Minimal RFB 3.8 client (Raw encoding) for localhost x11vnc.
  */
 class RfbClient(
     private val host: String = VncConfig.HOST,
     private val port: Int = VncConfig.PORT,
+    private val password: String = VncConfig.PASSWORD,
 ) {
     private var socket: Socket? = null
     private var input: DataInputStream? = null
@@ -137,15 +141,28 @@ class RfbClient(
         }
         val types = IntArray(securityCount) { inp.readUnsignedByte() }
         val chosen = when {
-            types.contains(1) -> 1 // None
+            types.contains(1) -> 1
+            types.contains(2) && password.isNotEmpty() -> 2
             else -> types.first()
         }
         out.writeByte(chosen)
         out.flush()
 
-        if (chosen == 1) {
-            val result = inp.readInt()
-            if (result != 0) error("VNC security handshake failed ($result)")
+        when (chosen) {
+            1 -> {
+                val result = inp.readInt()
+                if (result != 0) error("VNC security handshake failed ($result)")
+            }
+            2 -> {
+                val challenge = ByteArray(16)
+                inp.readFully(challenge)
+                val response = encryptVncPassword(password, challenge)
+                out.write(response)
+                out.flush()
+                val result = inp.readInt()
+                if (result != 0) error("VNC password rejected ($result)")
+            }
+            else -> error("Unsupported VNC security type $chosen")
         }
 
         out.writeByte(1) // shared desktop
@@ -300,5 +317,33 @@ class RfbClient(
             if (ch != '\r'.code) sb.append(ch.toChar())
         }
         return sb.toString()
+    }
+
+    private fun encryptVncPassword(password: String, challenge: ByteArray): ByteArray {
+        val keyBytes = ByteArray(8)
+        password.toByteArray(Charsets.Latin1).copyInto(
+            destination = keyBytes,
+            endIndex = minOf(8, password.length),
+        )
+        for (i in keyBytes.indices) {
+            keyBytes[i] = reverseBits(keyBytes[i])
+        }
+        val desKey = DESKeySpec(keyBytes)
+        val cipher = Cipher.getInstance("DES/ECB/NoPadding")
+        cipher.init(
+            Cipher.ENCRYPT_MODE,
+            SecretKeyFactory.getInstance("DES").generateSecret(desKey),
+        )
+        return cipher.doFinal(challenge)
+    }
+
+    private fun reverseBits(value: Byte): Byte {
+        var v = value.toInt() and 0xFF
+        var result = 0
+        repeat(8) {
+            result = (result shl 1) or (v and 1)
+            v = v shr 1
+        }
+        return result.toByte()
     }
 }

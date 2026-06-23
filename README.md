@@ -7,7 +7,7 @@ Android-native AI cowork agent with embedded proot Linux desktop. Inspired by Ki
 | Phase | Status | Features |
 |-------|--------|----------|
 | 1 | ✅ Done | Compose UI shell, 16:9 desktop placeholder, settings, agent chat UI |
-| 2 | ✅ Current | UserLAnd-style VNC desktop (Xvfb + x11vnc + startxfce4), embedded viewer |
+| 2 | ✅ Current | UserLAnd backend fork + tightvnc :51 + embedded VNC viewer |
 | 3 | Planned | Koog agent, OpenAI-compatible API, plan/direct modes |
 | 4 | Planned | Agent swarm, skills (SKILL.md), self-improvement |
 | 5 | Planned | Schedule mode, file browser, external terminal |
@@ -15,7 +15,7 @@ Android-native AI cowork agent with embedded proot Linux desktop. Inspired by Ki
 
 ## Build
 
-**v0.6.1-vnc** uses a **UserLAnd-style** stack: proot guest runs `Xvfb` + `x11vnc` + `startxfce4`; the app embeds a VNC viewer in the 16:9 panel.
+**v0.7.0-userland** vendors the **UserLAnd backend** (BSD-2-Clause): `execInProot.sh`, `BusyboxExecutor`, `LocalServerManager`, tightvnc on port **5951**, plus our embedded VNC viewer.
 
 **Do not run `./gradlew` on the local PC** (especially ARM laptops) — use CI:
 

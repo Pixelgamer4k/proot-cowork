@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Proot Cowork</string>
     <string name="add_rootfs">Add your rootfs</string>
-    <string name="add_rootfs_hint">Import a Ubuntu rootfs .tar.gz with XFCE, Xvfb, and x11vnc (see rootfs-setup/ in the repo)</string>
+    <string name="add_rootfs_hint">Import Ubuntu rootfs with XFCE + tightvncserver (UserLAnd backend — see rootfs-setup/)</string>
     <string name="desktop_placeholder">Linux desktop will appear here</string>
     <string name="settings">Settings</string>
     <string name="api_base_url">API Base URL</string>

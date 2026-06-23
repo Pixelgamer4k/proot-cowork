@@ -12,6 +12,8 @@ object VncReadiness {
     private val logMarkers = listOf(
         "VNC_READY",
         "Listening for VNC connections on TCP port",
+        "tightvncserver",
+        "New 'X' desktop is",
     )
 
     fun isReadyLogLine(line: String): Boolean =

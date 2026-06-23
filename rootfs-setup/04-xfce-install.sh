@@ -2,49 +2,31 @@
 set -euo pipefail
 
 DISTRO="${DISTRO:-ubuntu}"
-echo "==> Installing XFCE4 + VNC stack in $DISTRO"
+echo "==> Installing XFCE4 + UserLAnd VNC stack in $DISTRO"
 
 proot-distro login "$DISTRO" --shared-tmp -- bash -lc '
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-apt install -y xfce4 xfce4-terminal thunar mousepad xvfb x11vnc dbus-x11 x11-xserver-utils x11-apps xterm openbox
+apt install -y xfce4 xfce4-terminal thunar mousepad tightvncserver expect xterm dbus-x11
 
-cat > /start-desktop.sh << "EOF"
-#!/usr/bin/bash
-set -euo pipefail
-export HOME="${HOME:-/home/cowork}"
-export USER="${USER:-cowork}"
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export DISPLAY=:99
-export XDG_RUNTIME_DIR=/tmp
-export TMPDIR=/tmp
-export LANG="${LANG:-C.UTF-8}"
-export GDK_PIXBUF_DISABLE_GLYCIN=1
-export GTK_USE_PORTAL=0
-export NO_AT_BRIDGE=1
-export GDK_BACKEND=x11
-cd "$HOME" 2>/dev/null || cd /
-VNC_PORT="${VNC_PORT:-5900}"
-SCREEN="${SCREEN:-1280x720x24}"
-pkill -x Xvfb 2>/dev/null || true
-pkill -f "x11vnc.*:99" 2>/dev/null || true
-sleep 0.5
-/usr/bin/Xvfb :99 -screen 0 "$SCREEN" -ac +extension GLX +render -noreset &
-sleep 1
-/usr/bin/x11vnc -display :99 -localhost -nopw -forever -shared -rfbport "$VNC_PORT" \
-  -ipv4 -noshm -noxdamage -noxrecord -noxfixes -noxkb -wait 50 &
-sleep 1
-echo "VNC_READY port=$VNC_PORT display=:99"
-exec dbus-launch --exit-with-session /usr/bin/startxfce4
-EOF
-
-chmod +x /start-desktop.sh
-if id cowork &>/dev/null; then
-    chown cowork:cowork /start-desktop.sh
+# UserLAnd xfce desktop entries for tightvnc
+USER_NAME="${USER_NAME:-cowork}"
+if id "$USER_NAME" &>/dev/null; then
+  HOME_DIR=$(eval echo "~$USER_NAME")
+  mkdir -p "$HOME_DIR/.vnc"
+  cat > "$HOME_DIR/.vnc/xstartup" << "XEOF"
+#!/bin/sh
+xrdb $HOME/.Xresources
+xsetroot -solid grey
+/usr/bin/startxfce4
+XEOF
+  chmod +x "$HOME_DIR/.vnc/xstartup"
+  cp "$HOME_DIR/.vnc/xstartup" "$HOME_DIR/.xinitrc"
+  chown -R "$USER_NAME:$USER_NAME" "$HOME_DIR/.vnc" "$HOME_DIR/.xinitrc" 2>/dev/null || true
 fi
 
-echo "==> XFCE + VNC installed, start-desktop.sh created"
+echo "==> XFCE + tightvnc installed (UserLAnd backend)"
 '
 
-echo "==> Done. Run 05-agent-tools.sh next."
+echo "==> Done. Run 05-agent-tools.sh next, then 06-export-rootfs.sh"

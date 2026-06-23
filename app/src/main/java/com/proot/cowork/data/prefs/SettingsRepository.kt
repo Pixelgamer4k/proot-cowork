@@ -11,7 +11,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import com.proot.cowork.userland.UserlandConfig
+import com.proot.cowork.userland.UserlandMigration
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "proot_cowork_prefs")
 
@@ -120,7 +121,10 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    fun getRootfsDir() = context.filesDir.resolve("rootfs")
+    fun getRootfsDir(): java.io.File {
+        UserlandMigration.migrateRootfsLayout(context.filesDir)
+        return context.filesDir.resolve(UserlandConfig.FILESYSTEM_DIR)
+    }
 
     fun getRootfsPartialDir() = context.filesDir.resolve("rootfs.partial")
 

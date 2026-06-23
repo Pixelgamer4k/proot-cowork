@@ -1,65 +1,47 @@
 # Proot Cowork Rootfs Setup
 
-Build a Ubuntu proot-distro rootfs that Proot Cowork can import. The app runs the desktop with **embedded VNC** (Xvfb + x11vnc + XFCE inside proot).
+Build a Ubuntu proot-distro rootfs for Proot Cowork **v0.7+** (UserLAnd backend).
 
 ## Prerequisites
 
-On your Android device (Termux from **F-Droid**):
+Termux from **F-Droid** + `proot-distro`. Termux:X11 is **not** required.
 
-1. [Termux](https://f-droid.org/en/packages/com.termux/)
-2. Inside Termux: `pkg update && pkg install proot-distro`
-
-Termux:X11 is **not** required for Proot Cowork v0.6+.
-
-## Quick Setup (Ubuntu + XFCE + VNC)
-
-Run these scripts in order from Termux (clone or copy `rootfs-setup/` into Termux):
+## Quick setup
 
 ```bash
 bash 01-termux-bootstrap.sh
 bash 02-install-distro.sh
 bash 03-guest-provision.sh
-bash 04-xfce-install.sh
-bash 05-agent-tools.sh   # optional
+bash 04-xfce-install.sh   # xfce4 + tightvncserver + expect
+bash 05-agent-tools.sh    # optional
 bash 06-export-rootfs.sh
 ```
 
-This creates `proot-cowork-rootfs.tar.gz` in your home directory.
+Export `proot-cowork-rootfs.tar.gz` and import in the app.
 
-Transfer it to phone storage, then in Proot Cowork tap **Add your rootfs** → Import.
+## What the app does (UserLAnd fork)
 
-## What the app does
-
-1. Extract tarball to `files/rootfs/`
-2. Deploy `/start-desktop.sh` (VNC session script) if needed
-3. Run proot with bind mounts for `/dev`, `/proc`, `/sys`
-4. Guest starts Xvfb `:99`, x11vnc on port `5900`, then `startxfce4`
-5. Embedded RFB viewer in the 16:9 panel connects to `127.0.0.1:5900`
+1. Extract rootfs to `files/1/` (UserLAnd filesystem layout)
+2. Inject UserLAnd guest `support/` scripts (`startVNCServer.sh`, etc.)
+3. Run **UserLAnd's** `execInProot.sh` + `BusyboxExecutor` + `LocalServerManager`
+4. Guest runs **tightvncserver :51** (port **5951**) with XFCE
+5. Embedded VNC viewer connects with password `userland`
 
 ## Required guest packages
 
-- `xfce4`, `dbus-x11` — desktop session
-- `xvfb`, `x11vnc` — virtual display + VNC server
+- `xfce4`, `dbus-x11`
+- `tightvncserver`, `expect` (VNC password setup)
+- User `cowork` (from `03-guest-provision.sh`)
 
-Script `04-xfce-install.sh` installs these and writes `/start-desktop.sh`.
-
-**Do not use** `proot-distro backup` for export — it nests paths incorrectly. Use `06-export-rootfs.sh`.
-
-## Export note (proot-distro v5+)
-
-Rootfs lives at `containers/<name>/rootfs/` (not `installed-rootfs/`). The export script detects both layouts.
+Script `04-xfce-install.sh` installs these and configures `~cowork/.vnc/xstartup`.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| Import: missing Xvfb/x11vnc | Re-run `04-xfce-install.sh` |
-| Import: missing startxfce4 | `apt install -y xfce4 dbus-x11` in guest |
-| Grey/black VNC panel | Check logs in app; ensure `VNC_READY` in guest log |
-| XFCE panel crashes (glycin) | App sets `GDK_PIXBUF_DISABLE_GLYCIN=1` in start script |
-| `/etc/sudoers.d/cowork` error | Re-run `03-guest-provision.sh` (installs sudo first) |
-| `can't sanitize binding /proc/self/fd/0` | Harmless proot warning on Termux |
-| Large tarball | `apt clean` in guest before export |
-| `tar: ./var/lib/snapd/void` | Use updated `06-export-rootfs.sh` excludes |
+| Missing tightvncserver | Re-run `04-xfce-install.sh` |
+| VNC auth failed | Password is `userland` (UserLAnd default) |
+| UserLAnd runtime missing | Reinstall APK from CI (includes UserLAnd jni libs) |
+| Old rootfs at `files/rootfs` | App auto-migrates to `files/1` on startup |
 
-See [docs/RESEARCH.md](../docs/RESEARCH.md) for architecture notes.
+See [third_party/USERLAND-NOTICE.md](../third_party/USERLAND-NOTICE.md).

@@ -6,6 +6,7 @@ import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.service.ProotDesktopService
+import com.proot.cowork.userland.UserlandMigration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -18,6 +19,7 @@ class RootfsRepository(
     private val importer = RootfsImporter(context)
 
     suspend fun repairStateOnStartup() = withContext(Dispatchers.IO) {
+        UserlandMigration.migrateRootfsLayout(context.filesDir)
         val rootfsDir = settingsRepository.getRootfsDir()
         val partialDir = settingsRepository.getRootfsPartialDir()
         partialDir.deleteRecursively()
@@ -66,13 +68,13 @@ class RootfsRepository(
                         rootfsDir.deleteRecursively()
                     }
                     moveDirectoryPreservingSymlinks(partialDir, rootfsDir)
-                    RootfsValidator.ensureStartScript(context, rootfsDir)
+                    RootfsValidator.prepareUserlandGuest(context, rootfsDir)
                     when {
                         !RootfsValidator.hasVncStack(rootfsDir) -> {
                             settingsRepository.clearImportingState()
                             DesktopSession.setState(DesktopState.NO_ROOTFS)
                             ImportResult.Error(
-                                "Rootfs missing Xvfb or x11vnc. Run rootfs-setup/04-xfce-install.sh",
+                                "Rootfs missing tightvncserver. Run rootfs-setup/04-xfce-install.sh",
                             )
                         }
                         !RootfsValidator.hasXfceStack(rootfsDir) -> {

@@ -1,6 +1,7 @@
 package com.proot.cowork.data.rootfs
 
 import android.content.Context
+import com.proot.cowork.userland.UserlandGuestSupport
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -9,13 +10,6 @@ object RootfsValidator {
     fun isValid(rootfsDir: File): Boolean {
         if (!rootfsDir.isDirectory) return false
         repairLayout(rootfsDir)
-        val startScript = File(rootfsDir, "start-desktop.sh")
-        if (!startScript.isFile) return false
-        if (!startScript.canExecute()) {
-            startScript.setExecutable(true, false)
-        }
-        if (!startScript.canExecute()) return false
-
         val bash = File(rootfsDir, "usr/bin/bash")
         if (!bash.isFile || bash.length() == 0L) return false
 
@@ -27,8 +21,9 @@ object RootfsValidator {
 
     fun hasVncStack(rootfsDir: File): Boolean {
         repairLayout(rootfsDir)
-        return resolveGuestBinary(rootfsDir, "Xvfb") != null &&
-            resolveGuestBinary(rootfsDir, "x11vnc") != null
+        return resolveGuestBinary(rootfsDir, "tightvncserver") != null ||
+            resolveGuestBinary(rootfsDir, "Xtightvnc") != null ||
+            resolveGuestBinary(rootfsDir, "vncserver") != null
     }
 
     fun hasXfceStack(rootfsDir: File): Boolean {
@@ -37,23 +32,9 @@ object RootfsValidator {
             resolveGuestBinary(rootfsDir, "xfce4-session") != null
     }
 
-    fun ensureStartScript(context: Context, rootfsDir: File) {
-        val out = File(rootfsDir, "start-desktop.sh")
-        val liveOverride = File(context.filesDir, "debug/live-desktop-script")
-        if (liveOverride.isFile && out.isFile) {
-            out.setExecutable(true, false)
-            return
-        }
-
-        val script = context.assets.open("desktop/start-desktop-vnc.sh")
-            .bufferedReader()
-            .use { it.readText() }
-        out.writeText(script)
-        out.setExecutable(true, false)
+    fun prepareUserlandGuest(context: Context, rootfsDir: File) {
+        UserlandGuestSupport.install(context, rootfsDir)
     }
-
-    fun liveDesktopScriptMarker(context: Context): File =
-        File(context.filesDir, "debug/live-desktop-script")
 
     fun resolveGuestBinary(rootfsDir: File, name: String): File? {
         val candidates = listOf(
@@ -66,7 +47,6 @@ object RootfsValidator {
     fun repairLayout(rootfsDir: File) {
         repairRootSymlinks(rootfsDir)
         repairGuestLinkerSymlinks(rootfsDir)
-        repairStartScriptShebang(rootfsDir)
     }
 
     private fun repairGuestLinkerSymlinks(rootfsDir: File) {
@@ -101,15 +81,5 @@ object RootfsValidator {
         } catch (_: Exception) {
             // Symlinks may fail on some devices.
         }
-    }
-
-    private fun repairStartScriptShebang(rootfsDir: File) {
-        val startScript = File(rootfsDir, "start-desktop.sh")
-        if (!startScript.isFile) return
-        val bash = File(rootfsDir, "usr/bin/bash")
-        if (!bash.isFile) return
-        val text = startScript.readText()
-        if (!text.startsWith("#!/bin/bash")) return
-        startScript.writeText(text.replaceFirst("#!/bin/bash", "#!/usr/bin/bash"))
     }
 }

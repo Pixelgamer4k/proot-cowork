@@ -22,6 +22,7 @@ Thumbs.db
 # Rootfs (large, user-provided)
 *.tar.gz
 files/rootfs/
+files/1/
 
-# Vendored native deps (fetched in CI)
-third_party/termux-x11/
+# UserLAnd / proot native libs (fetched in CI via scripts/fetch-userland-runtime.sh)
+app/src/main/jniLibs/

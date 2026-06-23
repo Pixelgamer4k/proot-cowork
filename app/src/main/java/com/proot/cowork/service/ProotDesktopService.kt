@@ -12,41 +12,48 @@ import com.proot.cowork.MainActivity
 import com.proot.cowork.ProotCoworkApp
 import com.proot.cowork.R
 import com.proot.cowork.data.prefs.SettingsRepository
-import com.proot.cowork.data.proot.ProotCommandBuilder
-import com.proot.cowork.data.proot.ProotProcessLauncher
-import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.rootfs.RootfsValidator
-import com.proot.cowork.data.vnc.VncReadiness
+import com.proot.cowork.data.vnc.VncConfig
+import com.proot.cowork.data.vnc.VncPortProbe
 import com.proot.cowork.debug.DebugStatusWriter
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.domain.vnc.VncSession
+import com.proot.cowork.userland.BusyboxExecutor
+import com.proot.cowork.userland.CoworkSession
+import com.proot.cowork.userland.LocalServerManager
+import com.proot.cowork.userland.ProotDebugLogger
+import com.proot.cowork.userland.UserlandConfig
+import com.proot.cowork.userland.UserlandFiles
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InterruptedIOException
-import java.io.InputStreamReader
-import kotlin.coroutines.coroutineContext
 
 class ProotDesktopService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var prootProcess: Process? = null
-    private var logJob: Job? = null
     private var desktopJob: Job? = null
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var userlandFiles: UserlandFiles
+    private lateinit var serverManager: LocalServerManager
+    private var session: CoworkSession? = null
 
     override fun onCreate() {
         super.onCreate()
         settingsRepository = (application as ProotCoworkApp).settingsRepository
+        userlandFiles = UserlandFiles(this, applicationInfo.nativeLibraryDir)
+        val executor = BusyboxExecutor(
+            userlandFiles,
+            ProotDebugLogger(getSharedPreferences("userland", MODE_PRIVATE), userlandFiles),
+        )
+        serverManager = LocalServerManager(filesDir.path, executor)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -64,11 +71,6 @@ class ProotDesktopService : Service() {
     }
 
     private fun startDesktop() {
-        if (prootProcess?.isAlive == true) {
-            DesktopSession.setState(DesktopState.RUNNING)
-            updateNotification("Linux desktop running (VNC)")
-            return
-        }
         if (desktopJob?.isActive == true) return
 
         val rootfs = settingsRepository.getRootfsDir()
@@ -83,7 +85,7 @@ class ProotDesktopService : Service() {
 
         if (!RootfsValidator.hasVncStack(rootfs)) {
             DesktopSession.appendLog(
-                "Rootfs missing Xvfb/x11vnc. Install: apt install -y xvfb x11vnc xfce4 dbus-x11",
+                "Rootfs missing tightvncserver. Install: apt install -y tightvncserver expect xfce4",
             )
             DesktopSession.setState(DesktopState.STOPPED)
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -92,8 +94,16 @@ class ProotDesktopService : Service() {
         }
 
         if (!RootfsValidator.hasXfceStack(rootfs)) {
+            DesktopSession.appendLog("Rootfs missing startxfce4. Install: apt install -y xfce4")
+            DesktopSession.setState(DesktopState.STOPPED)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
+
+        if (!userlandFiles.busybox.isFile || !userlandFiles.proot.isFile) {
             DesktopSession.appendLog(
-                "Rootfs missing startxfce4. Install: apt install -y xfce4",
+                "UserLAnd runtime missing. Reinstall APK built with fetch-userland-runtime.sh",
             )
             DesktopSession.setState(DesktopState.STOPPED)
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -104,93 +114,72 @@ class ProotDesktopService : Service() {
         DesktopSession.setState(DesktopState.STARTING)
         DesktopSession.clearLogs()
         DebugStatusWriter.clearProotLog(applicationContext)
-        updateNotification("Starting Linux desktop…")
+        updateNotification("Starting UserLAnd VNC desktop…")
 
         desktopJob = scope.launch {
-            val logLines = Channel<String>(capacity = Channel.UNLIMITED)
             try {
                 withContext(Dispatchers.IO) {
-                    RootfsValidator.ensureStartScript(applicationContext, rootfs)
+                    RootfsValidator.prepareUserlandGuest(applicationContext, rootfs)
                 }
 
-                val runtime = RuntimeBootstrap(applicationContext).ensureRuntime()
-                val command = ProotCommandBuilder.buildStartDesktop(
-                    context = applicationContext,
-                    runtime = runtime,
-                    rootfsDir = rootfs,
-                )
-                DesktopSession.appendLog("Starting proot (UserLAnd-style VNC desktop)")
-                DebugStatusWriter.writeProotCommand(applicationContext, command)
+                val coworkSession = CoworkSession()
+                session = coworkSession
 
-                val env = ProotCommandBuilder.launchEnvironment(applicationContext, runtime)
+                DesktopSession.appendLog("Starting UserLAnd backend (proot + tightvnc :${UserlandConfig.VNC_DISPLAY})")
 
-                val process = ProotProcessLauncher.start(
-                    context = applicationContext,
-                    argv = command,
-                    env = env,
-                )
-
-                prootProcess = process
-                logJob = launch {
-                    streamLogs(process, logLines)
+                val pid = serverManager.startServer(coworkSession) { line ->
+                    DesktopSession.appendLog(line)
+                    DebugStatusWriter.appendProotLog(applicationContext, line)
                 }
+                if (pid <= 0) {
+                    DesktopSession.appendLog("Failed to start VNC server (UserLAnd backend)")
+                    DesktopSession.setState(DesktopState.STOPPED)
+                    return@launch
+                }
+                coworkSession.pid = pid
+                DesktopSession.appendLog("proot session pid=$pid")
 
-                updateNotification("Waiting for VNC…")
-                val ready = VncReadiness.awaitReady(logLines = logLines)
-
-                if (!ready) {
-                    val tail = DesktopSession.logLines.value.takeLast(5).joinToString(" | ")
-                    DesktopSession.appendLog("Timed out waiting for VNC on 127.0.0.1:5900")
-                    if (tail.isNotBlank()) {
-                        DesktopSession.appendLog("Last proot output: $tail")
+                updateNotification("Waiting for VNC on :${UserlandConfig.VNC_PORT}…")
+                val deadline = System.currentTimeMillis() + VncConfig.BOOT_TIMEOUT_MS
+                var running = false
+                while (isActive && System.currentTimeMillis() < deadline) {
+                    if (serverManager.isServerRunning(coworkSession) && VncPortProbe.isOpen()) {
+                        running = true
+                        break
                     }
+                    delay(VncConfig.POLL_INTERVAL_MS)
+                }
+
+                if (!running) {
+                    DesktopSession.appendLog(
+                        "Timed out waiting for VNC on ${VncConfig.HOST}:${VncConfig.PORT}",
+                    )
                     DesktopSession.setState(DesktopState.STOPPED)
                     DebugStatusWriter.refresh(applicationContext)
-                    process.destroy()
+                    stopDesktopInternal()
                     return@launch
                 }
 
-                DesktopSession.appendLog("VNC ready on port 5900")
+                DesktopSession.appendLog("VNC ready on port ${VncConfig.PORT}")
                 DesktopSession.setState(DesktopState.RUNNING)
                 DebugStatusWriter.refresh(applicationContext)
-                updateNotification("Linux desktop running (VNC)")
+                updateNotification("Linux desktop running (UserLAnd VNC)")
 
-                val exit = process.waitFor()
-                DesktopSession.appendLog("proot exited with code $exit")
-                DebugStatusWriter.writeProotExit(applicationContext, exit)
+                while (isActive && serverManager.isServerRunning(coworkSession)) {
+                    delay(2000)
+                }
+
+                DesktopSession.appendLog("VNC session ended")
                 DesktopSession.setState(DesktopState.STOPPED)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 DesktopSession.appendLog("Error: ${e.message}")
                 DesktopSession.setState(DesktopState.STOPPED)
                 DebugStatusWriter.refresh(applicationContext)
             } finally {
-                logLines.close()
-                if (prootProcess?.isAlive != true) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                }
-            }
-        }
-    }
-
-    private suspend fun streamLogs(process: Process, logLines: kotlinx.coroutines.channels.Channel<String>) {
-        try {
-            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                var line = reader.readLine()
-                while (line != null && coroutineContext.isActive) {
-                    DesktopSession.appendLog(line)
-                    DebugStatusWriter.appendProotLog(applicationContext, line)
-                    logLines.trySend(line)
-                    line = reader.readLine()
-                }
-            }
-        } catch (_: InterruptedIOException) {
-            // Expected when proot is stopped while we are reading stdout.
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: java.io.IOException) {
-            if (coroutineContext.isActive && process.isAlive) {
-                DesktopSession.appendLog("Log stream ended: ${e.message}")
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
             }
         }
     }
@@ -202,12 +191,10 @@ class ProotDesktopService : Service() {
     }
 
     private fun stopDesktopInternal() {
-        logJob?.cancel()
-        logJob = null
         desktopJob?.cancel()
         desktopJob = null
-        prootProcess?.destroy()
-        prootProcess = null
+        session?.let { serverManager.stopService(it) }
+        session = null
         VncSession.disconnect()
         DesktopSession.setState(DesktopState.STOPPED)
     }

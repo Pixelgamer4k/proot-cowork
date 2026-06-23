@@ -20,7 +20,9 @@ object Routes {
 fun ProotCoworkApp(
     settingsRepository: SettingsRepository,
     rootfsRepository: RootfsRepository,
-    onImportRootfs: () -> Unit,
+    dropDirectoryLabel: String,
+    onImportDroppedFile: () -> Unit,
+    onImportChooseFile: () -> Unit,
 ) {
     val navController = rememberNavController()
 
@@ -33,7 +35,9 @@ fun ProotCoworkApp(
             HomeScreen(
                 settingsRepository = settingsRepository,
                 rootfsRepository = rootfsRepository,
-                onImportRootfs = onImportRootfs,
+                dropDirectoryLabel = dropDirectoryLabel,
+                onImportDroppedFile = onImportDroppedFile,
+                onImportChooseFile = onImportChooseFile,
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }

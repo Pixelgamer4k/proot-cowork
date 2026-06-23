@@ -2,7 +2,9 @@
 <resources>
     <string name="app_name">Proot Cowork</string>
     <string name="add_rootfs">Add your rootfs</string>
-    <string name="add_rootfs_hint">Import Ubuntu rootfs with XFCE + tightvncserver (UserLAnd backend — see rootfs-setup/)</string>
+    <string name="add_rootfs_hint">Drop %2$s into:\n%1$s\n\nOr choose any file with the picker (no /sdcard path needed).</string>
+    <string name="import_dropped_file">Import dropped file</string>
+    <string name="import_choose_file">Choose file…</string>
     <string name="desktop_placeholder">Linux desktop will appear here</string>
     <string name="settings">Settings</string>
     <string name="api_base_url">API Base URL</string>

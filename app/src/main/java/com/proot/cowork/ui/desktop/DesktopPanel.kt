@@ -43,7 +43,9 @@ fun DesktopPanel(
     importProgress: Float,
     distroName: String,
     desktopLogHint: String? = null,
-    onImportRootfs: () -> Unit,
+    dropDirectoryLabel: String,
+    onImportDroppedFile: () -> Unit,
+    onImportChooseFile: () -> Unit,
     onPowerOff: () -> Unit,
     onReboot: () -> Unit,
     onScreenshot: () -> Unit,
@@ -93,7 +95,11 @@ fun DesktopPanel(
             contentAlignment = Alignment.Center,
         ) {
             when (desktopState) {
-                DesktopState.NO_ROOTFS -> NoRootfsContent(onImportRootfs)
+                DesktopState.NO_ROOTFS -> NoRootfsContent(
+                    dropDirectoryLabel = dropDirectoryLabel,
+                    onImportDroppedFile = onImportDroppedFile,
+                    onImportChooseFile = onImportChooseFile,
+                )
                 DesktopState.IMPORTING -> ImportingContent(importProgress)
                 DesktopState.STARTING -> VncDesktopWithOverlay("Booting XFCE over VNC…")
                 DesktopState.RUNNING -> VncDesktopView(
@@ -125,7 +131,11 @@ private fun VncDesktopWithOverlay(message: String) {
 }
 
 @Composable
-private fun NoRootfsContent(onImportRootfs: () -> Unit) {
+private fun NoRootfsContent(
+    dropDirectoryLabel: String,
+    onImportDroppedFile: () -> Unit,
+    onImportChooseFile: () -> Unit,
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -152,14 +162,18 @@ private fun NoRootfsContent(onImportRootfs: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = stringResource(R.string.add_rootfs_hint),
+            text = stringResource(R.string.add_rootfs_hint, dropDirectoryLabel),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(20.dp))
-        FilledTonalButton(onClick = onImportRootfs) {
-            Text(stringResource(R.string.import_rootfs))
+        FilledTonalButton(onClick = onImportDroppedFile) {
+            Text(stringResource(R.string.import_dropped_file))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        FilledTonalButton(onClick = onImportChooseFile) {
+            Text(stringResource(R.string.import_choose_file))
         }
     }
 }

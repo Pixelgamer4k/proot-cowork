@@ -36,7 +36,36 @@ class RootfsRepository(
         }
     }
 
-    suspend fun importFromUri(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
+    /** Import from Storage Access Framework picker (content:// URI with read grant). */
+    suspend fun importFromUri(uri: Uri): ImportResult = importRootfs { partialDir, onProgress ->
+        importer.importFromUri(uri, partialDir, onProgress)
+    }
+
+    /** Import a tarball already on disk in app-readable storage (adb push / app files dir). */
+    suspend fun importFromFile(file: File): ImportResult = importRootfs { partialDir, onProgress ->
+        importer.importFromFile(file, partialDir, onProgress)
+    }
+
+    /**
+     * Locate a tarball in app storage (and optional path hint) and import without SAF.
+     * Use for adb workflows: push to [RootfsTarballLocator.dropDirectory].
+     */
+    suspend fun importAutoDiscover(pathHint: String? = null): ImportResult {
+        val file = RootfsTarballLocator.discover(context, pathHint)
+            ?: return ImportResult.Error(
+                buildString {
+                    append("No readable ${RootfsTarballLocator.DEFAULT_FILENAME} found.")
+                    append(" Copy or adb push it to ")
+                    append(RootfsTarballLocator.dropDirectoryLabel(context))
+                    append(" then retry.")
+                },
+            )
+        return importFromFile(file)
+    }
+
+    private suspend fun importRootfs(
+        extract: suspend (partialDir: File, onProgress: suspend (Float) -> Unit) -> ImportResult,
+    ): ImportResult = withContext(Dispatchers.IO) {
         stopDesktopService()
         settingsRepository.setImporting(true, 0f)
         DesktopSession.setState(DesktopState.IMPORTING)
@@ -45,10 +74,7 @@ class RootfsRepository(
         val rootfsDir = settingsRepository.getRootfsDir()
 
         val result = try {
-            importer.import(
-                sourceUri = uri,
-                destDir = partialDir,
-            ) { progress ->
+            extract(partialDir) { progress ->
                 settingsRepository.setImporting(true, progress)
             }
         } catch (e: Exception) {

@@ -1,5 +1,6 @@
 package com.proot.cowork
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.lifecycleScope
 import com.proot.cowork.data.proot.RuntimeBootstrap
+import com.proot.cowork.data.rootfs.RootfsTarballLocator
 import com.proot.cowork.data.vnc.VncPortProbe
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
@@ -33,6 +35,14 @@ class MainActivity : ComponentActivity() {
             ) { uri: Uri? ->
                 if (uri != null) {
                     scope.launch {
+                        try {
+                            contentResolver.takePersistableUriPermission(
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                            )
+                        } catch (_: SecurityException) {
+                            // OpenDocument grants session access; persistable is optional.
+                        }
                         app.rootfsRepository.importFromUri(uri)
                     }
                 }
@@ -42,8 +52,20 @@ class MainActivity : ComponentActivity() {
                 ProotCoworkApp(
                     settingsRepository = app.settingsRepository,
                     rootfsRepository = app.rootfsRepository,
-                    onImportRootfs = {
-                        importLauncher.launch(arrayOf("application/gzip", "application/x-gzip", "application/octet-stream"))
+                    dropDirectoryLabel = RootfsTarballLocator.dropDirectoryLabel(this),
+                    onImportDroppedFile = {
+                        scope.launch {
+                            app.rootfsRepository.importAutoDiscover()
+                        }
+                    },
+                    onImportChooseFile = {
+                        importLauncher.launch(
+                            arrayOf(
+                                "application/gzip",
+                                "application/x-gzip",
+                                "application/octet-stream",
+                            ),
+                        )
                     },
                 )
             }

@@ -1,9 +1,9 @@
 package com.proot.cowork.debug
 
 import android.content.Context
-import android.net.Uri
 import com.proot.cowork.BuildConfig
 import com.proot.cowork.ProotCoworkApp
+import com.proot.cowork.data.rootfs.RootfsTarballLocator
 import com.proot.cowork.data.rootfs.RootfsValidator
 import com.proot.cowork.userland.UserlandConfig
 import com.proot.cowork.userland.UserlandFiles
@@ -12,7 +12,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.io.File
 
 object DebugBridge {
 
@@ -52,9 +51,10 @@ object DebugBridge {
             }
             "DUMP_PROOT_CMD" -> dumpProotCommand(context)
             "IMPORT_ROOTFS" -> {
-                val path = extras["path"] ?: "/sdcard/proot-cowork-rootfs.tar.gz"
+                val path = extras["path"]?.takeIf { it.isNotBlank() && !it.equals("auto", ignoreCase = true) }
                 importRootfsAsync(context, path)
-                "Import started from $path (check status.json)"
+                val label = path ?: "auto (${RootfsTarballLocator.dropDirectoryLabel(context)})"
+                "Import started: $label (check status.json)"
             }
             "RUN_PROOT_SHELL" -> legacyProotShellDisabled()
             else -> "Unknown command: $command. Use: DUMP_STATUS, START_DESKTOP, STOP_DESKTOP, REBOOT_DESKTOP, TAIL_LOGS, DUMP_PROOT_CMD, IMPORT_ROOTFS, RUN_PROOT_SHELL"
@@ -102,18 +102,28 @@ object DebugBridge {
         "RUN_PROOT_SHELL disabled: legacy ProotCommandBuilder uses --sysvipc and conflicts " +
             "with UserLAnd backend. Use START_DESKTOP or TAIL_LOGS."
 
-    private fun importRootfsAsync(context: Context, path: String) {
+    private fun importRootfsAsync(context: Context, pathHint: String?) {
         scope.launch {
-            val file = resolveImportFile(context, path)
-            if (file == null) {
-                DesktopSession.appendLog("Debug import failed: not a file: $path")
-                DebugStatusWriter.refresh(context)
-                return@launch
+            val repo = (context.applicationContext as ProotCoworkApp).rootfsRepository
+            val result = if (pathHint == null) {
+                DesktopSession.appendLog(
+                    "Debug import: auto-discover in ${RootfsTarballLocator.dropDirectoryLabel(context)}",
+                )
+                repo.importAutoDiscover()
+            } else {
+                val file = RootfsTarballLocator.discover(context, pathHint)
+                if (file == null) {
+                    DesktopSession.appendLog(
+                        "Debug import failed: cannot read $pathHint — " +
+                            "adb push ${RootfsTarballLocator.DEFAULT_FILENAME} " +
+                            RootfsTarballLocator.dropDirectoryLabel(context),
+                    )
+                    DebugStatusWriter.refresh(context)
+                    return@launch
+                }
+                DesktopSession.appendLog("Debug import from ${file.absolutePath} (${file.length()} bytes)")
+                repo.importFromFile(file)
             }
-            val uri = Uri.fromFile(file)
-            DesktopSession.appendLog("Debug import from ${file.absolutePath} (${file.length()} bytes)")
-            val result = (context.applicationContext as ProotCoworkApp)
-                .rootfsRepository.importFromUri(uri)
             DesktopSession.appendLog(
                 when (result) {
                     is com.proot.cowork.data.rootfs.ImportResult.Success ->
@@ -124,23 +134,6 @@ object DebugBridge {
             )
             DebugStatusWriter.refresh(context)
         }
-    }
-
-    /** Resolve tarball paths that Java File cannot see directly (scoped storage aliases). */
-    private fun resolveImportFile(context: Context, path: String): File? {
-        val name = File(path).name
-        val candidates = linkedSetOf<File>()
-        candidates += File(path)
-        if (path.startsWith("/sdcard/")) {
-            candidates += File(path.replace("/sdcard/", "/storage/emulated/0/"))
-        }
-        context.getExternalFilesDir(null)?.let { ext ->
-            candidates += File(ext, name)
-        }
-        context.filesDir?.let { files ->
-            candidates += File(files, name)
-        }
-        return candidates.firstOrNull { it.isFile && it.canRead() && it.length() > 0L }
     }
 
 }

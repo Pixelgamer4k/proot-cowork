@@ -29,7 +29,9 @@ import com.proot.cowork.ui.desktop.DesktopPanel
 fun HomeScreen(
     settingsRepository: SettingsRepository,
     rootfsRepository: RootfsRepository,
-    onImportRootfs: () -> Unit,
+    dropDirectoryLabel: String,
+    onImportDroppedFile: () -> Unit,
+    onImportChooseFile: () -> Unit,
     onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.factory(settingsRepository, rootfsRepository),
@@ -59,7 +61,9 @@ fun HomeScreen(
                 importProgress = uiState.importProgress,
                 distroName = uiState.distroName,
                 desktopLogHint = uiState.desktopLogHint,
-                onImportRootfs = onImportRootfs,
+                dropDirectoryLabel = dropDirectoryLabel,
+                onImportDroppedFile = onImportDroppedFile,
+                onImportChooseFile = onImportChooseFile,
                 onPowerOff = viewModel::onPowerOff,
                 onReboot = viewModel::onReboot,
                 onScreenshot = viewModel::onScreenshot,

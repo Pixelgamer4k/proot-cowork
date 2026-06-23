@@ -124,8 +124,8 @@ object ProotCommandBuilder {
             "/proc",
             "/sys",
             "/dev/urandom:/dev/random",
-            "${tmpDir.absolutePath}:/tmp",
-            "${tmpDir.absolutePath}:/dev/shm",
+            // Keep guest /tmp inside rootfs — binding host app-data tmp breaks hard links
+            // (Xvfb lock files use link(); Android returns ENOSYS on app-data paths).
             "${File(sysdataDir, "sys_empty").absolutePath}:/sys/fs/selinux",
         )
 

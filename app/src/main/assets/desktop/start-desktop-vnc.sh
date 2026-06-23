@@ -9,7 +9,10 @@ export DISPLAY=:99
 export XDG_RUNTIME_DIR=/tmp
 export TMPDIR=/tmp
 
-# Do not chdir here — guest chdir can return ENOSYS on Android; proot --cwd=/root sets CWD.
+# Guest /tmp must live inside rootfs (not host app-data bind) for X lock hard links.
+mkdir -p /tmp/.X11-unix
+chmod 1777 /tmp /tmp/.X11-unix
+rm -f /tmp/.X*-lock
 
 VNC_PORT="${VNC_PORT:-5900}"
 SCREEN="${SCREEN:-1280x720x24}"

@@ -94,13 +94,14 @@ object DebugBridge {
 
     private fun importRootfsAsync(context: Context, path: String) {
         scope.launch {
-            val file = File(path)
-            if (!file.isFile) {
+            val file = resolveImportFile(context, path)
+            if (file == null) {
                 DesktopSession.appendLog("Debug import failed: not a file: $path")
                 DebugStatusWriter.refresh(context)
                 return@launch
             }
             val uri = Uri.fromFile(file)
+            DesktopSession.appendLog("Debug import from ${file.absolutePath} (${file.length()} bytes)")
             val result = (context.applicationContext as ProotCoworkApp)
                 .rootfsRepository.importFromUri(uri)
             DesktopSession.appendLog(
@@ -113,6 +114,23 @@ object DebugBridge {
             )
             DebugStatusWriter.refresh(context)
         }
+    }
+
+    /** Resolve tarball paths that Java File cannot see directly (scoped storage aliases). */
+    private fun resolveImportFile(context: Context, path: String): File? {
+        val name = File(path).name
+        val candidates = linkedSetOf<File>()
+        candidates += File(path)
+        if (path.startsWith("/sdcard/")) {
+            candidates += File(path.replace("/sdcard/", "/storage/emulated/0/"))
+        }
+        context.getExternalFilesDir(null)?.let { ext ->
+            candidates += File(ext, name)
+        }
+        context.filesDir?.let { files ->
+            candidates += File(files, name)
+        }
+        return candidates.firstOrNull { it.isFile && it.canRead() && it.length() > 0L }
     }
 
     private fun runProotShellAsync(context: Context, shellCommand: String) {

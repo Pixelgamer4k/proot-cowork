@@ -39,9 +39,16 @@ case "${1:-help}" in
     adb shell run-as "$PKG" cat files/debug/last-proot-command.txt
     ;;
   import)
-    path="${2:-/sdcard/proot-cowork-rootfs.tar.gz}"
+    path="${2:-}"
+    if [[ -z "$path" ]]; then
+      adb shell mkdir -p "/sdcard/Android/data/${PKG}/files"
+      adb shell "test -f /sdcard/Android/data/${PKG}/files/proot-cowork-rootfs.tar.gz || cp /sdcard/proot-cowork-rootfs.tar.gz /sdcard/Android/data/${PKG}/files/proot-cowork-rootfs.tar.gz"
+      path="/sdcard/Android/data/${PKG}/files/proot-cowork-rootfs.tar.gz"
+    fi
+    adb shell am start -n "${PKG}/com.proot.cowork.MainActivity" >/dev/null 2>&1 || true
+    sleep 2
     broadcast IMPORT_ROOTFS --es path "$path"
-  ;;
+    ;;
   shell)
     cmd="${2:-echo PROOT_OK}"
     adb shell "am broadcast -a '$ACTION' -n '$RECEIVER' --es cmd RUN_PROOT_SHELL --es command '$cmd'"

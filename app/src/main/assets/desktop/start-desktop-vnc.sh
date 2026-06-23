@@ -66,7 +66,47 @@ paint_background() {
   fi
 }
 
+install_guest_stubs() {
+  mkdir -p /usr/local/bin
+  cat > /usr/local/bin/bwrap <<'EOF'
+#!/usr/bin/bash
+for i in "${!@}"; do
+  if [ "${!i}" = "--" ]; then
+    exec "${@:$((i + 1))}"
+  fi
+done
+target=""
+tail_args=()
+for arg in "$@"; do
+  if [[ "$arg" == /* ]] && [ -e "$arg" ]; then
+    if [ -z "$target" ]; then
+      target="$arg"
+      continue
+    fi
+  fi
+  if [ -n "$target" ]; then
+    tail_args+=("$arg")
+  fi
+done
+if [ -n "$target" ]; then
+  exec "$target" "${tail_args[@]}"
+fi
+exit 1
+EOF
+  cat > /usr/local/bin/dbus-launch <<'EOF'
+#!/usr/bin/bash
+if [ "${1:-}" = "--exit-with-session" ]; then
+  shift
+fi
+exec "$@"
+EOF
+  chmod +x /usr/local/bin/bwrap /usr/local/bin/dbus-launch
+  echo "Desktop: guest stubs installed in /usr/local/bin"
+}
+
 launch_visible_apps() {
+  install_guest_stubs
+
   if [ -x /usr/bin/xterm ]; then
     echo "Desktop: starting xterm"
     DISPLAY=:99 /usr/bin/xterm -maximized -bg "#1e1e2e" -fg "#cdd6f4" \
@@ -74,17 +114,28 @@ launch_visible_apps() {
     return
   fi
 
-  # GTK terminals (xfce4-terminal) abort under app-launched proot: no bwrap.
-  if [ -x /usr/bin/xclock ]; then
-    echo "Desktop: starting xclock"
-    DISPLAY=:99 /usr/bin/xclock -digital -strftime "%H:%M:%S" \
-      -geometry 420x48+24+24 -bg "#1e1e2e" -fg "#cdd6f4" -resize -noresize &
+  if [ -x /usr/bin/xfce4-terminal ]; then
+    echo "Desktop: starting xfce4-terminal"
+    DISPLAY=:99 /usr/bin/xfce4-terminal \
+      --maximize \
+      --title="Proot Cowork" \
+      --color-bg="#1e1e2e" \
+      --color-text="#cdd6f4" \
+      --font="Monospace 14" \
+      -e bash &
+    sleep 2
+    if DISPLAY=:99 xwininfo -root -tree 2>/dev/null | grep -qi xfce4-terminal; then
+      echo "Desktop: xfce4-terminal window visible"
+      return
+    fi
+    echo "Desktop: xfce4-terminal failed, trying fallback"
+    pkill -x xfce4-terminal 2>/dev/null || true
   fi
-  if [ -x /usr/bin/xmessage ]; then
-    echo "Desktop: starting welcome banner"
-    DISPLAY=:99 /usr/bin/xmessage -center -default okay -timeout 0 \
-      -bg "#1e1e2e" -fg "#cdd6f4" -fn "10x20" \
-      "Proot Cowork desktop is running." &
+
+  if [ -x /usr/bin/xclock ]; then
+    echo "Desktop: starting xclock (install xterm in rootfs for a shell)"
+    DISPLAY=:99 /usr/bin/xclock -digital -strftime "%H:%M:%S" \
+      -geometry 1280x48+0+0 -bg "#1e1e2e" -fg "#cdd6f4" -resize -noresize &
   fi
 }
 
@@ -153,5 +204,5 @@ trap cleanup INT TERM
 wait "$XVFB_PID" "$X11VNC_PID"
 kill "$wm_pid" 2>/dev/null || true
 pkill -x xterm 2>/dev/null || true
+pkill -x xfce4-terminal 2>/dev/null || true
 pkill -x xclock 2>/dev/null || true
-pkill -x xmessage 2>/dev/null || true

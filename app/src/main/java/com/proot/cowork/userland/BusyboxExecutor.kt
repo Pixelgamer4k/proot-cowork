@@ -127,7 +127,8 @@ class BusyboxWrapper(private val ulaFiles: UserlandFiles) {
         val externalStorageBinding = ulaFiles.sdCardUserDir?.let {
             "-b ${it.absolutePath}:/storage/sdcard"
         } ?: ""
-        val bindings = "$emulatedStorageBinding $externalStorageBinding"
+        val apexBinding = if (java.io.File("/apex").isDirectory) "-b /apex:/apex " else ""
+        val bindings = "$apexBinding$emulatedStorageBinding $externalStorageBinding".trim()
         return hashMapOf(
             "LD_LIBRARY_PATH" to ulaFiles.supportDir.absolutePath,
             "LIB_PATH" to ulaFiles.supportDir.absolutePath,

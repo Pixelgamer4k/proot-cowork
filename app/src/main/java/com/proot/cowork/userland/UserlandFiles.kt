@@ -30,6 +30,7 @@ class UserlandFiles(
         emulatedUserDir.mkdirs()
         sdCardUserDir?.mkdirs()
         setupLinks()
+        UserlandHostSupport.install(context, this)
     }
 
     fun makePermissionsUsable(containingDirectoryPath: String, filename: String) {

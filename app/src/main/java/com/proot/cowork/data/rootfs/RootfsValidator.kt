@@ -1,7 +1,6 @@
 package com.proot.cowork.data.rootfs
 
 import android.content.Context
-import com.proot.cowork.BuildConfig
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -39,19 +38,10 @@ object RootfsValidator {
     }
 
     fun ensureStartScript(context: Context, rootfsDir: File) {
-        if (BuildConfig.USE_TERMUX_X11) {
-            ensureX11StartScript(context, rootfsDir)
-        } else {
-            ensureVncStartScript(context, rootfsDir)
-        }
-    }
-
-    fun ensureVncStartScript(context: Context, rootfsDir: File) {
         val out = File(rootfsDir, "start-desktop.sh")
         val liveOverride = File(context.filesDir, "debug/live-desktop-script")
-        if (BuildConfig.DEBUG && liveOverride.isFile && out.isFile) {
+        if (liveOverride.isFile && out.isFile) {
             out.setExecutable(true, false)
-            ensureGuestPayload(context, rootfsDir)
             return
         }
 
@@ -60,77 +50,6 @@ object RootfsValidator {
             .use { it.readText() }
         out.writeText(script)
         out.setExecutable(true, false)
-        ensureGuestPayload(context, rootfsDir)
-    }
-
-    fun ensureX11StartScript(context: Context, rootfsDir: File) {
-        val out = File(rootfsDir, "start-desktop.sh")
-        val liveOverride = File(context.filesDir, "debug/live-desktop-script")
-        if (BuildConfig.DEBUG && liveOverride.isFile && out.isFile) {
-            out.setExecutable(true, false)
-            ensureGuestPayload(context, rootfsDir)
-            return
-        }
-
-        val script = context.assets.open("desktop/start-desktop-x11.sh")
-            .bufferedReader()
-            .use { it.readText() }
-        out.writeText(script)
-        out.setExecutable(true, false)
-        ensureGuestPayload(context, rootfsDir)
-    }
-
-    private fun ensureGuestPayload(context: Context, rootfsDir: File) {
-        copyAssetTree(context, "desktop/guest-bin", rootfsDir)
-        val coworkDest = File(rootfsDir, "usr/share/proot-cowork")
-        // AssetManager.list() skips dot-prefixed names; assets use config/ + xsessionrc.
-        copyAssetTree(context, "desktop/cowork-config/config", File(coworkDest, ".config"))
-        copyAssetTree(context, "desktop/cowork-config/xsessionrc", File(coworkDest, ".xsessionrc"))
-        markExecutableGuests(rootfsDir)
-    }
-
-    private fun markExecutableGuests(rootfsDir: File) {
-        listOf(
-            "usr/bin/xterm",
-            "usr/bin/start-cowork-xfce",
-            "usr/bin/openbox",
-            "usr/bin/openbox-session",
-            "usr/bin/cowork-bwrap",
-            "usr/bin/cowork-dbus-launch",
-            "usr/bin/obxprop",
-            "usr/lib/aarch64-linux-gnu/utempter/utempter",
-        ).forEach { rel ->
-            File(rootfsDir, rel).takeIf { it.isFile }?.setExecutable(true, false)
-        }
-    }
-
-    private fun copyAssetTree(context: Context, assetPath: String, destRoot: File) {
-        val children = context.assets.list(assetPath) ?: return
-        val relativePath = when {
-            assetPath == "desktop/guest-bin" -> ""
-            assetPath.startsWith("desktop/guest-bin/") -> assetPath.removePrefix("desktop/guest-bin/")
-            assetPath == "desktop/cowork-config/config" -> ""
-            assetPath.startsWith("desktop/cowork-config/config/") ->
-                assetPath.removePrefix("desktop/cowork-config/config/")
-            assetPath == "desktop/cowork-config/xsessionrc" -> ""
-            else -> return
-        }
-        val dest = if (relativePath.isEmpty()) destRoot else File(destRoot, relativePath)
-        if (children.isEmpty()) {
-            dest.parentFile?.mkdirs()
-            try {
-                context.assets.open(assetPath).use { input ->
-                    dest.outputStream().use { output -> input.copyTo(output) }
-                }
-            } catch (e: java.io.FileNotFoundException) {
-                throw IllegalStateException("Missing APK asset: $assetPath", e)
-            }
-            return
-        }
-        dest.mkdirs()
-        for (child in children) {
-            copyAssetTree(context, "$assetPath/$child", destRoot)
-        }
     }
 
     fun liveDesktopScriptMarker(context: Context): File =
@@ -180,7 +99,7 @@ object RootfsValidator {
         try {
             Files.createSymbolicLink(path.toPath(), Paths.get(target))
         } catch (_: Exception) {
-            // Symlinks may fail on some devices; caller can use absolute guest paths.
+            // Symlinks may fail on some devices.
         }
     }
 

@@ -9,10 +9,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.lifecycleScope
-import com.proot.cowork.BuildConfig
 import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.vnc.VncPortProbe
-import com.proot.cowork.data.x11.X11Readiness
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.ui.ProotCoworkApp
@@ -51,20 +49,12 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Auto-start desktop only when rootfs is fully valid (prevents crash loops).
         lifecycleScope.launch {
             app.rootfsRepository.repairStateOnStartup()
             val state = app.settingsRepository.rootfsState.first { !it.isImporting }
             if (state.isInstalled && app.rootfsRepository.canStartDesktop()) {
-                val desktopAlreadyUp = withContext(Dispatchers.IO) {
-                    if (BuildConfig.USE_TERMUX_X11) {
-                        val runtime = RuntimeBootstrap(this@MainActivity).ensureRuntime()
-                        X11Readiness.peekSocket(runtime.tmpDir, display = 0)
-                    } else {
-                        VncPortProbe.isOpen()
-                    }
-                }
-                if (desktopAlreadyUp) {
+                val vncAlreadyUp = withContext(Dispatchers.IO) { VncPortProbe.isOpen() }
+                if (vncAlreadyUp) {
                     DesktopSession.setState(DesktopState.RUNNING)
                 } else {
                     app.rootfsRepository.startDesktopService()

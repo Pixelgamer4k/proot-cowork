@@ -7,7 +7,7 @@ Android-native AI cowork agent with embedded proot Linux desktop. Inspired by Ki
 | Phase | Status | Features |
 |-------|--------|----------|
 | 1 | ✅ Done | Compose UI shell, 16:9 desktop placeholder, settings, agent chat UI |
-| 2 | ✅ Current | Proot + X11 desktop, rootfs import, power controls |
+| 2 | ✅ Current | UserLAnd-style VNC desktop (Xvfb + x11vnc + startxfce4), embedded viewer |
 | 3 | Planned | Koog agent, OpenAI-compatible API, plan/direct modes |
 | 4 | Planned | Agent swarm, skills (SKILL.md), self-improvement |
 | 5 | Planned | Schedule mode, file browser, external terminal |
@@ -15,21 +15,13 @@ Android-native AI cowork agent with embedded proot Linux desktop. Inspired by Ki
 
 ## Build
 
-**v0.5.0-termux** embeds **Termux:X11** (native X11 on `:0`) and optional **Termux bootstrap** (`files/usr`). Desktop uses `startxfce4` like Termux — not the VNC/Xvfb path.
+**v0.6.0-vnc** uses a **UserLAnd-style** stack: proot guest runs `Xvfb` + `x11vnc` + `startxfce4`; the app embeds a VNC viewer in the 16:9 panel (no external VNC app, no Termux:X11).
 
 ```bash
-# One-time: clone & patch termux-x11 native module
-bash scripts/setup-x11-module.sh
-
-# Optional (~100MB): bundle full Termux prefix in APK
-bash scripts/fetch-termux-bootstrap.sh
-
-# Local build needs a JDK (not JRE), e.g. Temurin 17:
-export JAVA_HOME="$HOME/.local/jdks/temurin-17"   # after installing a JDK
 ./gradlew assembleDebug
 ```
 
-Debug APKs are built via GitHub Actions on every push to `main`. First CI build with termux-x11 may take ~30–60 minutes.
+Debug APKs are built via GitHub Actions on every push to `main` (~5 minutes).
 
 ```bash
 # Trigger manually

@@ -22,20 +22,6 @@
         android:largeHeap="true"
         tools:replace="android:allowBackup,android:theme,android:label,android:icon">
 
-        <!-- termux-x11 is a library; do not expose its standalone launcher. -->
-        <activity
-            android:name="com.termux.x11.MainActivity"
-            tools:node="remove" />
-        <activity
-            android:name="com.termux.x11.LoriePreferences"
-            tools:node="remove" />
-        <service
-            android:name="com.termux.x11.utils.KeyInterceptor"
-            tools:node="remove" />
-        <receiver
-            android:name="com.termux.x11.LoriePreferences$Receiver"
-            tools:node="remove" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"

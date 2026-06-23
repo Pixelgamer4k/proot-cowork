@@ -124,7 +124,7 @@ EOF
     ;;
 
   push-desktop)
-    script="${2:-$ROOT/app/src/main/assets/desktop/start-desktop-x11.sh}"
+    script="${2:-$ROOT/app/src/main/assets/desktop/start-desktop-vnc.sh}"
     echo "Pushing $script -> files/rootfs/start-desktop.sh"
     push_host "$script" "files/rootfs/start-desktop.sh"
     run_as "head -20 files/rootfs/start-desktop.sh"

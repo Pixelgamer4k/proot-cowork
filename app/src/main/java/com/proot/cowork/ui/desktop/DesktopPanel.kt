@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,7 +35,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
-import com.proot.cowork.BuildConfig
 import com.proot.cowork.domain.proot.DesktopState
 
 @Composable
@@ -97,10 +95,31 @@ fun DesktopPanel(
             when (desktopState) {
                 DesktopState.NO_ROOTFS -> NoRootfsContent(onImportRootfs)
                 DesktopState.IMPORTING -> ImportingContent(importProgress)
-                DesktopState.STARTING -> StartingContent()
-                DesktopState.RUNNING -> RunningDesktopContent()
+                DesktopState.STARTING -> VncDesktopWithOverlay("Booting XFCE over VNC…")
+                DesktopState.RUNNING -> VncDesktopView(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                )
                 DesktopState.STOPPED -> StoppedContent(onReboot, desktopLogHint)
             }
+        }
+    }
+}
+
+@Composable
+private fun VncDesktopWithOverlay(message: String) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        VncDesktopView(modifier = Modifier.fillMaxSize())
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(message)
         }
     }
 }
@@ -158,44 +177,6 @@ private fun ImportingContent(progress: Float) {
         LinearProgressIndicator(
             progress = { progress.coerceIn(0f, 1f) },
             modifier = Modifier.fillMaxWidth(0.6f),
-        )
-    }
-}
-
-@Composable
-private fun StartingContent() {
-    if (BuildConfig.USE_TERMUX_X11) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            X11DesktopView(modifier = Modifier.fillMaxSize())
-            Column(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Booting proot + Termux:X11 desktop…")
-            }
-        }
-    } else {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator()
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Booting proot + VNC desktop…")
-        }
-    }
-}
-
-@Composable
-private fun RunningDesktopContent() {
-    if (BuildConfig.USE_TERMUX_X11) {
-        X11DesktopView(modifier = Modifier.fillMaxSize())
-    } else {
-        VncDesktopView(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
         )
     }
 }

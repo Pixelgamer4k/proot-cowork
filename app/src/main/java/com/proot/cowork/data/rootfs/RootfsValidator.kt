@@ -82,11 +82,10 @@ object RootfsValidator {
 
     private fun ensureGuestPayload(context: Context, rootfsDir: File) {
         copyAssetTree(context, "desktop/guest-bin", rootfsDir)
-        copyAssetTree(
-            context,
-            "desktop/cowork-config",
-            File(rootfsDir, "usr/share/proot-cowork"),
-        )
+        val coworkDest = File(rootfsDir, "usr/share/proot-cowork")
+        // AssetManager.list() skips dot-prefixed names; assets use config/ + xsessionrc.
+        copyAssetTree(context, "desktop/cowork-config/config", File(coworkDest, ".config"))
+        copyAssetTree(context, "desktop/cowork-config/xsessionrc", File(coworkDest, ".xsessionrc"))
         markExecutableGuests(rootfsDir)
     }
 
@@ -108,16 +107,23 @@ object RootfsValidator {
     private fun copyAssetTree(context: Context, assetPath: String, destRoot: File) {
         val children = context.assets.list(assetPath) ?: return
         val relativePath = when {
-            assetPath == "desktop/guest-bin" || assetPath == "desktop/cowork-config" -> ""
+            assetPath == "desktop/guest-bin" -> ""
             assetPath.startsWith("desktop/guest-bin/") -> assetPath.removePrefix("desktop/guest-bin/")
-            assetPath.startsWith("desktop/cowork-config/") -> assetPath.removePrefix("desktop/cowork-config/")
+            assetPath == "desktop/cowork-config/config" -> ""
+            assetPath.startsWith("desktop/cowork-config/config/") ->
+                assetPath.removePrefix("desktop/cowork-config/config/")
+            assetPath == "desktop/cowork-config/xsessionrc" -> ""
             else -> return
         }
         val dest = if (relativePath.isEmpty()) destRoot else File(destRoot, relativePath)
         if (children.isEmpty()) {
             dest.parentFile?.mkdirs()
-            context.assets.open(assetPath).use { input ->
-                dest.outputStream().use { output -> input.copyTo(output) }
+            try {
+                context.assets.open(assetPath).use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+            } catch (e: java.io.FileNotFoundException) {
+                throw IllegalStateException("Missing APK asset: $assetPath", e)
             }
             return
         }

@@ -139,5 +139,11 @@ patch_file(lorie_view, [
         '''            if (a.useTermuxEKBarBehaviour && a.mExtraKeys != null)''',
         '''            if (a != null && a.useTermuxEKBarBehaviour && a.mExtraKeys != null)''',
     ),
+    (
+        '''    @FastNative static native void connect(int fd);
+    @CriticalNative static native boolean connected();''',
+        '''    @FastNative public static native void connect(int fd);
+    @CriticalNative public static native boolean connected();''',
+    ),
 ], "LorieView")
 PY

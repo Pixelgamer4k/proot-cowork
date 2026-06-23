@@ -115,7 +115,7 @@ launch_terminal() {
         --color-bg="#1e1e2e" \
         --color-text="#cdd6f4" \
         --font="Monospace 14" \
-        --execute=bash &
+        -e bash &
       ;;
     xterm)
       DISPLAY=:99 "$term" -maximized -fa Monospace -fs 14 \

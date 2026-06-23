@@ -321,7 +321,7 @@ class RfbClient(
 
     private fun encryptVncPassword(password: String, challenge: ByteArray): ByteArray {
         val keyBytes = ByteArray(8)
-        password.toByteArray(Charsets.Latin1).copyInto(
+        password.toByteArray(Charsets.ISO_8859_1).copyInto(
             destination = keyBytes,
             endIndex = minOf(8, password.length),
         )

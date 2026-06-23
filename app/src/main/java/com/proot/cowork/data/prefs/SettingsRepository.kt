@@ -11,6 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import com.proot.cowork.userland.UserlandConfig
 import com.proot.cowork.userland.UserlandMigration
 

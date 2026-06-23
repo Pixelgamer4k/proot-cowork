@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.system.Os
 import java.io.File
+import java.nio.file.Files
 
 /**
  * Vendored from UserLAnd (BSD-2-Clause) — paths and symlinks for proot/busybox support.
@@ -47,9 +48,21 @@ class UserlandFiles(
     private fun String.toSupportName(): String =
         substringAfter("lib_").substringBeforeLast(".so")
 
+    private fun isUserlandHostLib(fileName: String): Boolean {
+        if (!fileName.startsWith("lib_") || !fileName.endsWith(".so")) return false
+        if (fileName.startsWith("libandroid") || fileName.startsWith("libdatastore")) return false
+        return true
+    }
+
     private fun setupLinks() {
         supportDir.mkdirs()
+        supportDir.listFiles()?.forEach { entry ->
+            if (Files.isSymbolicLink(entry.toPath())) {
+                entry.delete()
+            }
+        }
         libDir.listFiles()?.forEach { libFile ->
+            if (!isUserlandHostLib(libFile.name)) return@forEach
             var libFileName = libFile.name
             if (libFileName.startsWith("lib_proot.") ||
                 libFileName.startsWith("lib_libtalloc") ||

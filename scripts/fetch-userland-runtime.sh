@@ -8,10 +8,12 @@ GUEST="$ROOT/app/src/main/assets/userland/guest-support"
 ULA_APK_URL="${ULA_APK_URL:-https://github.com/CypherpunkArmory/UserLAnd/releases/download/v2.8.3/app-release.apk}"
 ULA_TAG="${ULA_TAG:-v2.8.3}"
 
-if [[ -f "$JNILIBS/lib_proot.so" && -f "$JNILIBS/lib_busybox.so" && -f "$JNILIBS/lib_execInProot.sh.so" ]]; then
+if [[ -f "$JNILIBS/lib_proot.so" && -f "$JNILIBS/lib_busybox.so" && -f "$JNILIBS/lib_execInProot.sh.so" ]] \
+  && [[ ! -f "$JNILIBS/libproot_exec.so" ]]; then
   echo "==> UserLAnd runtime already present in jniLibs"
 else
   mkdir -p "$JNILIBS"
+  rm -f "$JNILIBS"/*
   tmpdir="$(mktemp -d)"
   trap 'rm -rf "$tmpdir"' EXIT
   echo "==> Downloading UserLAnd $ULA_TAG APK"

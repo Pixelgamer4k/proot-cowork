@@ -42,6 +42,7 @@ object UserlandHostSupport {
 
     private fun installAssetScript(context: Context, supportDir: File, name: String) {
         val dest = File(supportDir, name)
+        if (dest.exists()) dest.delete()
         context.assets.open("$ASSET_PREFIX/$name").use { input ->
             dest.outputStream().use { output -> input.copyTo(output) }
         }

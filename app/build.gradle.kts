@@ -12,8 +12,8 @@ android {
         applicationId = "com.proot.cowork"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.7.7-userland"
+        versionCode = 12
+        versionName = "0.7.8-userland"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -8,42 +8,50 @@ import java.io.File
 import java.io.RandomAccessFile
 
 /**
- * Wraps apt with absolute Dir::* overrides. libapt still embeds com.termux paths for
- * apt-key and apt.conf.d; [TermuxElfPathPatch.patchLibAptIfNeeded] fixes those ELFs.
+ * Shell wrappers for apt/dpkg with absolute Dir::* overrides and PREFIX/bin on PATH.
+ * libapt embeds com.termux paths; [TermuxElfPathPatch.patchLibAptIfNeeded] patches those ELFs.
  */
 object TermuxAptWrapper {
 
     private const val TAG = "TermuxAptWrapper"
-    private const val HELPER = "cowork-apt"
+    private const val APT_HELPER = "cowork-apt"
+    private const val DPKG_HELPER = "cowork-dpkg"
 
     fun installIfNeeded(context: Context, prefix: File) {
-        val marker = File(prefix, ".termux_apt_wrapped_v2")
+        val marker = File(prefix, ".termux_apt_wrapped_v3")
         if (marker.isFile) return
 
         File(prefix, ".termux_apt_wrapped_v1").delete()
+        File(prefix, ".termux_apt_wrapped_v2").delete()
         val cacheRoot = context.cacheDir.absolutePath
-        writeHelperScript(prefix, cacheRoot)
-        ensureAptWrapper(prefix)
+        val prefixPath = prefix.absolutePath
+        writeAptHelper(prefix, cacheRoot, prefixPath)
+        ensureAptWrapper(prefix, prefixPath)
+        ensureDpkgWrapper(prefix, prefixPath)
         marker.createNewFile()
-        Log.i(TAG, "installed apt wrapper with absolute Dir overrides")
+        Log.i(TAG, "installed apt/dpkg wrappers with absolute Dir overrides")
     }
 
-    private fun writeHelperScript(prefix: File, cacheRoot: String) {
-        val prefixPath = prefix.absolutePath
+    private fun writeAptHelper(prefix: File, cacheRoot: String, prefixPath: String) {
         val sh = "$prefixPath/bin/sh"
-        val helper = File(prefix, "bin/$HELPER")
+        val helper = File(prefix, "bin/$APT_HELPER")
         helper.writeText(
             """
             |#!$sh
+            |export PATH="$prefixPath/bin:${'$'}PATH"
+            |export LD_LIBRARY_PATH="$prefixPath/lib${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
             |exec "$prefixPath/bin/apt.real" \
             |  -o Dir::Etc="$prefixPath/etc/apt" \
+            |  -o Dir::Etc::parts="$prefixPath/etc/apt/apt.conf.d" \
+            |  -o Dir::Etc::sourcelist="$prefixPath/etc/apt/sources.list" \
+            |  -o Dir::Etc::sourceparts="$prefixPath/etc/apt/sources.list.d" \
             |  -o Dir::State="$prefixPath/var/lib/apt" \
             |  -o Dir::State::status="$prefixPath/var/lib/dpkg/status" \
             |  -o Dir::State::tmpdir="$prefixPath/tmp" \
             |  -o Dir::Cache="$cacheRoot/apt" \
             |  -o Dir::Cache::archives="$cacheRoot/apt/archives" \
             |  -o Dir::Bin::methods="$prefixPath/lib/apt/methods" \
-            |  -o Dir::Bin::dpkg="$prefixPath/bin/dpkg" \
+            |  -o Dir::Bin::dpkg="$prefixPath/bin/$DPKG_HELPER" \
             |  -o Dir::Bin::gpg="$prefixPath/bin/gpgv" \
             |  -o Dir::Log="$prefixPath/var/log/apt" \
             |  "${'$'}@"
@@ -52,7 +60,7 @@ object TermuxAptWrapper {
         chmodExecutable(helper)
     }
 
-    private fun ensureAptWrapper(prefix: File) {
+    private fun ensureAptWrapper(prefix: File, prefixPath: String) {
         val real = File(prefix, "bin/apt.real")
         val apt = File(prefix, "bin/apt")
         if (!real.isFile) {
@@ -65,15 +73,40 @@ object TermuxAptWrapper {
                 return
             }
         }
-        val prefixPath = prefix.absolutePath
         val aptWrapper = File(prefix, "bin/apt")
         aptWrapper.writeText(
             """
             |#!$prefixPath/bin/sh
-            |exec "$prefixPath/bin/$HELPER" "${'$'}@"
+            |exec "$prefixPath/bin/$APT_HELPER" "${'$'}@"
             """.trimMargin(),
         )
         chmodExecutable(aptWrapper)
+    }
+
+    private fun ensureDpkgWrapper(prefix: File, prefixPath: String) {
+        val real = File(prefix, "bin/dpkg.real")
+        val dpkg = File(prefix, "bin/dpkg")
+        if (!real.isFile) {
+            if (dpkg.isFile && isElf(dpkg)) {
+                if (!dpkg.renameTo(real)) {
+                    Log.w(TAG, "failed to rename dpkg to dpkg.real")
+                    return
+                }
+            } else {
+                return
+            }
+        }
+        val sh = "$prefixPath/bin/sh"
+        val helper = File(prefix, "bin/$DPKG_HELPER")
+        helper.writeText(
+            """
+            |#!$sh
+            |export PATH="$prefixPath/bin:${'$'}PATH"
+            |export LD_LIBRARY_PATH="$prefixPath/lib${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
+            |exec "$prefixPath/bin/dpkg.real" "${'$'}@"
+            """.trimMargin(),
+        )
+        chmodExecutable(helper)
     }
 
     private fun isElf(file: File): Boolean {

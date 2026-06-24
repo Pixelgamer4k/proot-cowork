@@ -25,7 +25,7 @@ object TermuxElfPathPatch {
         File(prefix, "lib").listFiles()
             ?.filter { it.isFile && it.name.startsWith("libapt") }
             ?.let { targets.addAll(it) }
-        listOf("apt.real", "gpgv", "gpg").forEach { name ->
+        listOf("apt.real", "dpkg.real", "gpgv", "gpg").forEach { name ->
             val bin = File(prefix, "bin/$name")
             if (bin.isFile) targets.add(bin)
         }

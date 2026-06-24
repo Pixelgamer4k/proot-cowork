@@ -19,6 +19,7 @@ object TermuxBinaryRestore {
     private fun unwrapApt(prefix: File) {
         File(prefix, "bin/cowork-proot").delete()
         File(prefix, "bin/cowork-apt").delete()
+        File(prefix, "bin/cowork-dpkg").delete()
         unwrapOne(prefix, "apt")
     }
 

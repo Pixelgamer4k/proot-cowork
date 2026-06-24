@@ -62,12 +62,11 @@ object TermuxBootstrap {
 
     private const val TAG = "TermuxBootstrap"
 
-    fun filesDir(context: Context): File = context.filesDir
+    fun filesDir(context: Context): File = TermuxLayout.rootfsDir(context)
 
-    fun prefixDir(context: Context): File = File(context.filesDir, "usr")
+    fun prefixDir(context: Context): File = TermuxLayout.prefixDir(context)
 
-    /** Real Termux home is `files/home`, not `files/usr/home`. */
-    fun homeDir(context: Context): File = File(context.filesDir, "home")
+    fun homeDir(context: Context): File = TermuxLayout.homeDir(context)
 
     fun bashExecutable(context: Context): File = File(prefixDir(context), "bin/bash")
 

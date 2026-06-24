@@ -15,9 +15,16 @@ object TermuxShellEnvironment {
         val filesDir = context.filesDir.absolutePath
         val dataDir = File(filesDir).parentFile?.absolutePath ?: filesDir
         val prefix = TermuxBootstrap.prefixDir(context).absolutePath
+        val debPrefix = TermuxLayout.debPrefixDir(context).absolutePath
+        val legacyPrefix = TermuxLayout.legacyPrefixDir(context).absolutePath
         val home = TermuxBootstrap.homeDir(context).absolutePath
         val tmp = File(prefix, "tmp").absolutePath
         val cacheDir = context.cacheDir.absolutePath
+        val pathBins = linkedSetOf(
+            "$prefix/bin",
+            "$debPrefix/bin",
+            "$legacyPrefix/bin",
+        ).joinToString(":")
 
         val env = linkedMapOf(
             "HOME" to home,
@@ -29,7 +36,8 @@ object TermuxShellEnvironment {
             "TERMUX__CACHE_DIR" to cacheDir,
             "TERMUX_APP__DATA_DIR" to dataDir,
             "TERMUX_APP__FILES_DIR" to filesDir,
-            "PATH" to prefix + "/bin",
+            "TERMUX_APP__LEGACY_DATA_DIR" to "/data/data/${context.packageName}",
+            "PATH" to pathBins,
             "LD_LIBRARY_PATH" to File(prefix, "lib").absolutePath,
             "TMPDIR" to tmp,
             "PWD" to home,

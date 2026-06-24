@@ -18,21 +18,23 @@ object TermuxAptWrapper {
     private const val DPKG_HELPER = "cowork-dpkg"
 
     fun installIfNeeded(context: Context, prefix: File) {
-        val marker = File(prefix, ".termux_apt_wrapped_v3")
+        val marker = File(prefix, ".termux_apt_wrapped_v4")
         if (marker.isFile) return
 
         File(prefix, ".termux_apt_wrapped_v1").delete()
         File(prefix, ".termux_apt_wrapped_v2").delete()
+        File(prefix, ".termux_apt_wrapped_v3").delete()
         val cacheRoot = context.cacheDir.absolutePath
+        val filesRoot = context.filesDir.absolutePath
         val prefixPath = prefix.absolutePath
-        writeAptHelper(prefix, cacheRoot, prefixPath)
+        writeAptHelper(prefix, cacheRoot, filesRoot, prefixPath)
         ensureAptWrapper(prefix, prefixPath)
-        ensureDpkgWrapper(prefix, prefixPath)
+        ensureDpkgWrapper(prefix, filesRoot, prefixPath)
         marker.createNewFile()
-        Log.i(TAG, "installed apt/dpkg wrappers with absolute Dir overrides")
+        Log.i(TAG, "installed apt/dpkg wrappers (dpkg --root=$filesRoot)")
     }
 
-    private fun writeAptHelper(prefix: File, cacheRoot: String, prefixPath: String) {
+    private fun writeAptHelper(prefix: File, cacheRoot: String, filesRoot: String, prefixPath: String) {
         val sh = "$prefixPath/bin/sh"
         val helper = File(prefix, "bin/$APT_HELPER")
         helper.writeText(
@@ -83,7 +85,7 @@ object TermuxAptWrapper {
         chmodExecutable(aptWrapper)
     }
 
-    private fun ensureDpkgWrapper(prefix: File, prefixPath: String) {
+    private fun ensureDpkgWrapper(prefix: File, filesRoot: String, prefixPath: String) {
         val real = File(prefix, "bin/dpkg.real")
         val dpkg = File(prefix, "bin/dpkg")
         if (!real.isFile) {
@@ -103,7 +105,7 @@ object TermuxAptWrapper {
             |#!$sh
             |export PATH="$prefixPath/bin:${'$'}PATH"
             |export LD_LIBRARY_PATH="$prefixPath/lib${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
-            |exec "$prefixPath/bin/dpkg.real" "${'$'}@"
+            |exec "$prefixPath/bin/dpkg.real" --root="$filesRoot" "${'$'}@"
             """.trimMargin(),
         )
         chmodExecutable(helper)

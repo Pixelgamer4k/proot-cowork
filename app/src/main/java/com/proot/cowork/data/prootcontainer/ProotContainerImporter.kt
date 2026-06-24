@@ -155,6 +155,7 @@ class ProotContainerImporter(private val context: Context) {
                     val target = File(rootfs, entry.name)
                     entry.renameTo(target) || run {
                         if (entry.isDirectory) copyDirectory(entry, target) else entry.copyTo(target, true)
+                        true
                     }
                 }
                 writeDefaultManifest(dest)

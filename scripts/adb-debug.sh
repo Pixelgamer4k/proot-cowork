@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ADB helpers for com.proot.cowork.debug (debug APK only).
+# ADB helpers for com.proot (debug APK).
 set -euo pipefail
 
-PKG="${PKG:-com.proot.cowork.debug}"
+PKG="${PKG:-com.proot}"
 RECEIVER="${PKG}/com.proot.cowork.debug.DebugCommandReceiver"
 ACTION="com.proot.cowork.debug.COMMAND"
 

@@ -110,6 +110,10 @@ object TermuxBootstrap {
         ensureCacheLayout(context)
         TermuxStorageSetup.ensureStorageLinks(context)
 
+        if (!TermuxExecSetup.applyIfNeeded(context, prefix)) {
+            Log.w(TAG, "termux-exec setup failed; pkg may not work")
+        }
+
         if (!TermuxBootstrapRunner.runSecondStageIfNeeded(context)) {
             Log.w(TAG, "bootstrap second stage failed; shell may still work")
         }

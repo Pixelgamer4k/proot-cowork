@@ -5,39 +5,52 @@ import android.os.Build
 import com.proot.cowork.BuildConfig
 import java.io.File
 
-/** Termux-compatible environment for subprocesses (matches termux-app essentials). */
+/** Termux-compatible environment (aligned with termux-app TermuxShellEnvironment). */
 object TermuxShellEnvironment {
 
-    fun build(context: Context): Array<String> {
+    fun build(context: Context): Array<String> =
+        buildProcessEnvironment(context).map { (k, v) -> "$k=$v" }.toTypedArray()
+
+    fun buildProcessEnvironment(context: Context): Map<String, String> {
         val filesDir = context.filesDir.absolutePath
+        val dataDir = File(filesDir).parentFile?.absolutePath ?: filesDir
         val prefix = TermuxBootstrap.prefixDir(context).absolutePath
         val home = TermuxBootstrap.homeDir(context).absolutePath
         val tmp = File(prefix, "tmp").absolutePath
-        val lib = File(prefix, "lib").absolutePath
+        val cacheDir = context.cacheDir.absolutePath
 
-        val env = mutableListOf(
-            "HOME=$home",
-            "TERMUX__HOME=$home",
-            "PREFIX=$prefix",
-            "TERMUX__PREFIX=$prefix",
-            "TERMUX__ROOTFS_DIR=$filesDir",
-            "PATH=$prefix/bin",
-            "LD_LIBRARY_PATH=$lib",
-            "TMPDIR=$tmp",
-            "PROOT_TMP_DIR=${File(prefix, "var/tmp").absolutePath}",
-            "PROOT_LOADER=${File(prefix, "libexec/proot/loader").absolutePath}",
-            "PWD=$home",
-            "DISPLAY=:0",
-            "TERM=xterm-256color",
-            "COLORTERM=truecolor",
-            "LANG=en_US.UTF-8",
-            "TERMUX_VERSION=${BuildConfig.VERSION_NAME}",
-            "TERMUX_APP_PACKAGE_MANAGER=apt",
-            "TERMUX_PACKAGE_MANAGER=apt",
-            "TERMUX_PACKAGE_ARCH=aarch64",
-            "TERMUX_APP__PACKAGE_NAME=${context.packageName}",
-            "ANDROID__BUILD_VERSION_SDK=${Build.VERSION.SDK_INT}",
+        val env = linkedMapOf(
+            "HOME" to home,
+            "TERMUX__HOME" to home,
+            "PREFIX" to prefix,
+            "TERMUX__PREFIX" to prefix,
+            "TERMUX__ROOTFS" to filesDir,
+            "TERMUX__ROOTFS_DIR" to filesDir,
+            "TERMUX__CACHE_DIR" to cacheDir,
+            "TERMUX_APP__DATA_DIR" to dataDir,
+            "TERMUX_APP__FILES_DIR" to filesDir,
+            "PATH" to prefix + "/bin",
+            "TMPDIR" to tmp,
+            "PWD" to home,
+            "DISPLAY" to ":0",
+            "TERM" to "xterm-256color",
+            "COLORTERM" to "truecolor",
+            "LANG" to "en_US.UTF-8",
+            "TERMUX_VERSION" to BuildConfig.VERSION_NAME,
+            "TERMUX_APP__PACKAGE_MANAGER" to "apt",
+            "TERMUX_PACKAGE_MANAGER" to "apt",
+            "TERMUX_PACKAGE_ARCH" to "aarch64",
+            "TERMUX_APP__PACKAGE_NAME" to context.packageName,
+            "ANDROID__BUILD_VERSION_SDK" to Build.VERSION.SDK_INT.toString(),
         )
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            env["LD_LIBRARY_PATH"] = File(prefix, "lib").absolutePath
+        }
+
+        TermuxExecSetup.ldPreloadPath(TermuxBootstrap.prefixDir(context))?.let { preload ->
+            env["LD_PRELOAD"] = preload
+        }
 
         listOf(
             "BOOTCLASSPATH",
@@ -50,9 +63,9 @@ object TermuxShellEnvironment {
             "ANDROID_RUNTIME_ROOT",
             "ANDROID_TZDATA_ROOT",
         ).forEach { name ->
-            System.getenv(name)?.let { env += "$name=$it" }
+            System.getenv(name)?.let { env[name] = it }
         }
 
-        return env.toTypedArray()
+        return env
     }
 }

@@ -5,7 +5,7 @@
 # Rebuild the APK only when changing Kotlin/Java, AndroidManifest, or packaging.
 set -euo pipefail
 
-PKG="${PKG:-com.proot.cowork.debug}"
+PKG="${PKG:-com.proot}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DATA="/data/user/0/${PKG}"
 FILES="${DATA}/files"

@@ -9,11 +9,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.proot.cowork"
+        applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "0.10.13-termux-stack"
+        versionCode = 31
+        versionName = "0.10.14-termux-stack"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -28,7 +28,7 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
+            // No applicationIdSuffix: com.proot paths must fit ELF slots (/data/data/com.proot/files).
         }
         release {
             isMinifyEnabled = true

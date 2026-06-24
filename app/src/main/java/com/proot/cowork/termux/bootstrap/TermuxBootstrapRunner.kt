@@ -25,10 +25,7 @@ object TermuxBootstrapRunner {
         val bash = TermuxBootstrap.shellExecutable(context) ?: return false
         Log.i(TAG, "Running Termux bootstrap second stage")
 
-        val env = TermuxShellEnvironment.build(context).associate {
-            val eq = it.indexOf('=')
-            it.substring(0, eq) to it.substring(eq + 1)
-        }.toMutableMap()
+        val env = TermuxShellEnvironment.buildProcessEnvironment(context)
 
         val pb = ProcessBuilder(bash.absolutePath, script.absolutePath)
         pb.directory(TermuxBootstrap.homeDir(context))

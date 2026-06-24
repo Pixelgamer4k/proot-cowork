@@ -30,7 +30,8 @@ object TermuxAptWrapper {
     private fun writeHelperScript(prefix: File, cacheRoot: String) {
         val prefixPath = prefix.absolutePath
         val sh = "$prefixPath/bin/sh"
-        File(prefix, "bin/$HELPER").writeText(
+        val helper = File(prefix, "bin/$HELPER")
+        helper.writeText(
             """
             |#!$sh
             |. "$prefixPath/etc/profile"
@@ -45,7 +46,8 @@ object TermuxAptWrapper {
             |  -o Dir::Log="${'$'}PREFIX/var/log/apt" \
             |  "${'$'}@"
             """.trimMargin(),
-        ).also { chmodExecutable(it) }
+        )
+        chmodExecutable(helper)
     }
 
     private fun ensureAptWrapper(prefix: File) {
@@ -62,13 +64,15 @@ object TermuxAptWrapper {
             }
         }
         val prefixPath = prefix.absolutePath
-        File(prefix, "bin/apt").writeText(
+        val aptWrapper = File(prefix, "bin/apt")
+        aptWrapper.writeText(
             """
             |#!$prefixPath/bin/sh
             |. "$prefixPath/etc/profile"
             |exec "$prefixPath/bin/$HELPER" "${'$'}@"
             """.trimMargin(),
-        ).also { chmodExecutable(it) }
+        )
+        chmodExecutable(aptWrapper)
     }
 
     private fun isElf(file: File): Boolean {

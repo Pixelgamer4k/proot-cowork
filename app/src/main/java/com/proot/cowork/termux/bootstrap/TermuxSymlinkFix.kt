@@ -9,8 +9,7 @@ import java.io.File
 
 /**
  * Repairs bootstrap symlinks that still target `/data/data/com.termux/files/...`
- * (e.g. `etc/apt/trusted.gpg.d/*.gpg` → termux-keyring). Text patching does not
- * touch symlink targets.
+ * (e.g. trusted.gpg.d keyring links). Text patching does not touch symlink targets.
  */
 object TermuxSymlinkFix {
 

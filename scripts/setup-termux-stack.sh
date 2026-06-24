@@ -20,4 +20,6 @@ if [[ ! -d "$APP_DIR/.git" ]]; then
     https://github.com/zweck/termux-app.git "$APP_DIR"
 fi
 
+bash "$ROOT/scripts/patch-termux-x11-embed.sh"
+
 echo "==> termux-x11 + termux-app ready"

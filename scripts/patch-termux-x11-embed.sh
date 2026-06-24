@@ -1,149 +1,107 @@
 #!/usr/bin/env bash
-# Patches termux-x11 for embedding inside Proot Cowork (not standalone APK).
+# Patch termux-x11 for in-process embed without launching MainActivity.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-X11="$ROOT/third_party/termux-x11/app/src/main/java/com/termux/x11"
+LORIE="$ROOT/third_party/termux-x11/app/src/main/java/com/termux/x11/LorieView.java"
+TOUCH="$ROOT/third_party/termux-x11/app/src/main/java/com/termux/x11/input/TouchInputHandler.java"
 
-python3 - "$X11" <<'PY'
+python3 - "$LORIE" "$TOUCH" <<'PY'
 import sys
 from pathlib import Path
 
-x11 = Path(sys.argv[1])
-
-def patch_file(path: Path, replacements: list[tuple[str, str]], label: str) -> None:
-    if not path.is_file():
-        print(f"{label}: file missing at {path}", file=sys.stderr)
-        sys.exit(1)
+def patch_lorie(path: Path) -> None:
     text = path.read_text()
-    changed = False
-    for old, new in replacements:
-        if old in text:
-            text = text.replace(old, new)
-            changed = True
-    if changed:
-        path.write_text(text)
-        print(f"Patched {label}")
-    else:
-        print(f"{label}: already patched")
+    marker = "COWORK_EMBED_PATCH"
+    if marker in text:
+        return
 
-cmd_ep = x11 / "CmdEntryPoint.java"
-patch_file(cmd_ep, [
-    (
-        '''        String path = "lib/" + Build.SUPPORTED_ABIS[0] + "/libXlorie.so";
-        ClassLoader loader = CmdEntryPoint.class.getClassLoader();
-        URL res = loader != null ? loader.getResource(path) : null;
-        String libPath = res != null ? res.getFile().replace("file:", "") : null;
-        if (libPath != null) {
-            try {
-                System.load(libPath);
-            } catch (Exception e) {
-                Log.e("CmdEntryPoint", "Failed to dlopen " + libPath, e);
-                System.err.println("Failed to load native library. Did you install the right apk? Try the universal one.");
-                System.exit(134);
-            }
+    old = """        Rect r = getHolder().getSurfaceFrame();
+        MainActivity.getInstance().runOnUiThread(() -> mSurfaceCallback.surfaceChanged(getHolder(), PixelFormat.BGRA_8888, r.width(), r.height()));
+    }"""
+    new = """        Rect r = getHolder().getSurfaceFrame();
+        Runnable work = () -> mSurfaceCallback.surfaceChanged(getHolder(), PixelFormat.BGRA_8888, r.width(), r.height());
+        MainActivity activity = MainActivity.getInstance();
+        if (activity != null) {
+            activity.runOnUiThread(work);
         } else {
-            // It is critical only when it is not running in Android application process
-            if (MainActivity.getInstance() == null) {
-                System.err.println("Failed to acquire native library. Did you install the right apk? Try the universal one.");
-                System.exit(134);
-            }
-        }''',
-        '''        try {
-            System.loadLibrary("Xlorie");
-        } catch (UnsatisfiedLinkError e) {
-            Log.e("CmdEntryPoint", "Failed to load libXlorie", e);
-        }''',
-    ),
-    (
-        '''    CmdEntryPoint(String[] args) {
-        if (!start(args))
-            System.exit(1);
-
-        spawnListeningThread();
-        sendBroadcastDelayed();
-    }''',
-        '''    CmdEntryPoint(String[] args) {
-        if (!start(args)) {
-            Log.e("CmdEntryPoint", "native start() failed");
-            if (getenv("TERMUX_X11_OVERRIDE_PACKAGE") == null
-                    && System.getProperty("TERMUX_X11_OVERRIDE_PACKAGE") == null) {
-                System.exit(1);
-            }
-            return;
+            post(work);
         }
+    }"""
+    if old not in text:
+        raise SystemExit(f"patch target missing in {path}")
+    text = text.replace(old, new)
 
-        spawnListeningThread();
-        sendBroadcastDelayed();
-    }''',
-    ),
-    (
-        '''        String targetPackage = getenv("TERMUX_X11_OVERRIDE_PACKAGE");
-        if (targetPackage == null)
-            targetPackage = "com.termux.x11";''',
-        '''        String targetPackage = getenv("TERMUX_X11_OVERRIDE_PACKAGE");
-        if (targetPackage == null)
-            targetPackage = System.getProperty("TERMUX_X11_OVERRIDE_PACKAGE");
-        if (targetPackage == null)
-            targetPackage = "com.termux.x11";''',
-    ),
-], "CmdEntryPoint")
-
-main_activity = x11 / "MainActivity.java"
-patch_file(main_activity, [
-    (
-        '''    public static Prefs getPrefs() {
-        return prefs;
-    }''',
-        '''    public static Prefs getPrefs() {
-        if (prefs == null && instance != null)
-            prefs = new Prefs(instance);
-        return prefs;
-    }''',
-    ),
-], "MainActivity")
-
-lorie_view = x11 / "LorieView.java"
-patch_file(lorie_view, [
-    (
-        '''    void getDimensionsFromSettings(int width, int height) {
+    old = """    void getDimensionsFromSettings() {
+        Prefs prefs = MainActivity.getPrefs();"""
+    new = """    void getDimensionsFromSettings() {
         Prefs prefs = MainActivity.getPrefs();
-        int w = width;
-        int h = height;
-        switch(prefs.displayResolutionMode.get()) {''',
-        '''    void getDimensionsFromSettings(int width, int height) {
-        Prefs prefs = MainActivity.getPrefs();
-        int w = width;
-        int h = height;
         if (prefs == null) {
-            p.set(w, h);
+            p.set(Math.max(getMeasuredWidth(), 1), Math.max(getMeasuredHeight(), 1));
+            return;
+        }"""
+    if old not in text:
+        raise SystemExit(f"getDimensionsFromSettings patch target missing in {path}")
+    text = text.replace(old, new)
+
+    old = """        Prefs prefs = MainActivity.getPrefs();
+        if (prefs.displayStretch.get()"""
+    new = """        Prefs prefs = MainActivity.getPrefs();
+        if (prefs == null) {
+            getHolder().setSizeFromLayout();
             return;
         }
-        switch(prefs.displayResolutionMode.get()) {''',
-    ),
-    (
-        '''        if (!prefs.displayStretch.get()) {''',
-        '''        if (prefs == null || !prefs.displayStretch.get()) {''',
-    ),
-    (
-        '''        return MainActivity.getInstance().handleKey(event);''',
-        '''        MainActivity activity = MainActivity.getInstance();
-        return activity != null && activity.handleKey(event);''',
-    ),
-    (
-        '''        if (MainActivity.getPrefs().enforceCharBasedInput.get())''',
-        '''        Prefs inputPrefs = MainActivity.getPrefs();
-        if (inputPrefs != null && inputPrefs.enforceCharBasedInput.get())''',
-    ),
-    (
-        '''            if (a.useTermuxEKBarBehaviour && a.mExtraKeys != null)''',
-        '''            if (a != null && a.useTermuxEKBarBehaviour && a.mExtraKeys != null)''',
-    ),
-    (
-        '''    @FastNative static native void connect(int fd);
-    @CriticalNative static native boolean connected();''',
-        '''    @FastNative public static native void connect(int fd);
-    @CriticalNative public static native boolean connected();''',
-    ),
-], "LorieView")
+        if (prefs.displayStretch.get()"""
+    if old not in text:
+        raise SystemExit(f"onMeasure patch target missing in {path}")
+    text = text.replace(old, new)
+
+    old = """        return MainActivity.getInstance().handleKey(event);
+    }"""
+    new = """        MainActivity activity = MainActivity.getInstance();
+        if (activity == null) {
+            return false;
+        }
+        return activity.handleKey(event);
+    }"""
+    if old not in text:
+        raise SystemExit(f"dispatchKeyEventPreIme patch target missing in {path}")
+    text = text.replace(old, new)
+
+    old = """        if (MainActivity.getPrefs().enforceCharBasedInput.get())"""
+    new = """        Prefs prefs = MainActivity.getPrefs();
+        if (prefs != null && prefs.enforceCharBasedInput.get())"""
+    if old not in text:
+        raise SystemExit(f"onCreateInputConnection patch target missing in {path}")
+    text = text.replace(old, new)
+
+    text = text.replace(
+        "public class LorieView extends SurfaceView implements InputStub {",
+        "public class LorieView extends SurfaceView implements InputStub { // " + marker,
+    )
+    path.write_text(text)
+
+def patch_touch(path: Path) -> None:
+    text = path.read_text()
+    marker = "COWORK_EMBED_PATCH"
+    if marker in text:
+        return
+
+    old = """        LorieView.requestStylusEnabled(stylusAvailable.get());
+        MainActivity.getInstance().setExternalKeyboardConnected(externalKeyboardAvailable.get());
+    }"""
+    new = """        LorieView.requestStylusEnabled(stylusAvailable.get());
+        MainActivity activity = MainActivity.getInstance();
+        if (activity != null) {
+            activity.setExternalKeyboardConnected(externalKeyboardAvailable.get());
+        }
+    } // COWORK_EMBED_PATCH"""
+    if old not in text:
+        raise SystemExit(f"refreshInputDevices patch target missing in {path}")
+    text = text.replace(old, new)
+    path.write_text(text)
+
+patch_lorie(Path(sys.argv[1]))
+patch_touch(Path(sys.argv[2]))
+print("==> termux-x11 embed patches applied")
 PY

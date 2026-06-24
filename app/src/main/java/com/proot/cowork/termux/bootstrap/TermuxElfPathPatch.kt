@@ -6,7 +6,7 @@ import java.io.RandomAccessFile
 
 /**
  * Patches null-terminated path strings in ELF binaries when the replacement fits in-place.
- * Uses the shorter `/data/data/<package>/files` form so paths fit the com.termux slots.
+ * Skips libapt* (use [TermuxAptWrapper] instead — patching corrupts apt Dir:: paths).
  */
 object TermuxElfPathPatch {
 
@@ -30,9 +30,8 @@ object TermuxElfPathPatch {
     }
 
     fun applyIfNeeded(prefix: File, elfRoot: String, filesRoot: String): Boolean {
-        val marker = File(prefix, ".termux_elf_patched_v2")
+        val marker = File(prefix, ".termux_elf_patched_v3")
         if (marker.isFile) return true
-        File(prefix, ".termux_elf_patched_v1").delete()
 
         var patched = 0
         val roots = listOf(
@@ -47,6 +46,8 @@ object TermuxElfPathPatch {
         roots.filter { it.isDirectory }.forEach { dir ->
             dir.walkTopDown().forEach { file ->
                 if (!file.isFile) return@forEach
+                if (file.name.startsWith("libapt")) return@forEach
+                if (file.name == "apt" || file.name == "apt.real") return@forEach
                 if (!file.name.endsWith(".so") && !isElf(file)) return@forEach
                 replacements.forEach { (from, to) ->
                     patched += patchFile(file, from, to)

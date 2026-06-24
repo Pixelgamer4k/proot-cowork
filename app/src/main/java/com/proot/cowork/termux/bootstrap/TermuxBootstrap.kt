@@ -106,6 +106,9 @@ object TermuxBootstrap {
             return false
         }
 
+        TermuxSymlinkFix.repairIfNeeded(context, prefix)
+        TermuxAptWrapper.installIfNeeded(context, prefix)
+
         // installBash runs before path patch; re-patch copied libbash (RUNPATH + strings).
         patchBashElf(context)
 

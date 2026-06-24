@@ -18,7 +18,7 @@ object TermuxPathPatch {
     private const val LEGACY_CACHE_USER = "/data/user/0/com.termux/cache"
 
     fun applyIfNeeded(context: Context, prefix: File): Boolean {
-        val marker = File(prefix, ".termux_paths_patched_v7")
+        val marker = File(prefix, ".termux_paths_patched_v8")
         if (marker.isFile) return true
 
         val filesRoot = context.filesDir.absolutePath
@@ -50,6 +50,7 @@ object TermuxPathPatch {
         patchLoginExec(prefix)
         TermuxStorageSetup.patchSetupStorageScript(prefix)
         TermuxElfPathPatch.applyIfNeeded(prefix, elfRoot, filesRoot)
+        TermuxAptWrapper.installIfNeeded(context, prefix)
         marker.createNewFile()
         return true
     }

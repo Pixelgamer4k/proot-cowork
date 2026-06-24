@@ -9,10 +9,17 @@ object TermuxBinaryRestore {
     private const val TAG = "TermuxBinaryRestore"
 
     fun unwrapPackageManagers(prefix: File) {
-        listOf("apt", "dpkg").forEach { name -> unwrapOne(prefix, name) }
+        unwrapApt(prefix)
+        listOf("dpkg").forEach { name -> unwrapOne(prefix, name) }
         File(prefix, "bin/cowork-proot").delete()
         File(prefix, ".termux_proot_wrapped_v1").delete()
         File(prefix, ".termux_proot_wrapped_v2").delete()
+    }
+
+    private fun unwrapApt(prefix: File) {
+        File(prefix, "bin/cowork-proot").delete()
+        File(prefix, "bin/cowork-apt").delete()
+        unwrapOne(prefix, "apt")
     }
 
     private fun unwrapOne(prefix: File, name: String) {

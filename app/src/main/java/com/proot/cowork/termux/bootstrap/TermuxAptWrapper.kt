@@ -18,12 +18,13 @@ object TermuxAptWrapper {
     private const val DPKG_HELPER = "cowork-dpkg"
 
     fun installIfNeeded(context: Context, prefix: File) {
-        val marker = File(prefix, ".termux_apt_wrapped_v4")
+        val marker = File(prefix, ".termux_apt_wrapped_v5")
         if (marker.isFile) return
 
         File(prefix, ".termux_apt_wrapped_v1").delete()
         File(prefix, ".termux_apt_wrapped_v2").delete()
         File(prefix, ".termux_apt_wrapped_v3").delete()
+        File(prefix, ".termux_apt_wrapped_v4").delete()
         val cacheRoot = context.cacheDir.absolutePath
         val filesRoot = context.filesDir.absolutePath
         val prefixPath = prefix.absolutePath
@@ -109,6 +110,14 @@ object TermuxAptWrapper {
             """.trimMargin(),
         )
         chmodExecutable(helper)
+        val dpkgWrapper = File(prefix, "bin/dpkg")
+        dpkgWrapper.writeText(
+            """
+            |#!$prefixPath/bin/sh
+            |exec "$prefixPath/bin/$DPKG_HELPER" "${'$'}@"
+            """.trimMargin(),
+        )
+        chmodExecutable(dpkgWrapper)
     }
 
     private fun isElf(file: File): Boolean {

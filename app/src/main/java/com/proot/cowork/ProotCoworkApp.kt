@@ -5,8 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.debug.DebugStatusWriter
+import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.userland.UserlandFiles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +23,8 @@ class ProotCoworkApp : Application() {
         private set
     lateinit var rootfsRepository: RootfsRepository
         private set
+    lateinit var prootContainerRepository: ProotContainerRepository
+        private set
     lateinit var userlandFiles: UserlandFiles
         private set
 
@@ -28,11 +32,14 @@ class ProotCoworkApp : Application() {
         super.onCreate()
         settingsRepository = SettingsRepository(this)
         rootfsRepository = RootfsRepository(this, settingsRepository)
+        prootContainerRepository = ProotContainerRepository(this, settingsRepository)
         userlandFiles = UserlandFiles(this, applicationInfo.nativeLibraryDir)
         DebugStatusWriter.init(this)
         createNotificationChannels()
         appScope.launch {
-            rootfsRepository.repairStateOnStartup()
+            if (!TERMUX_STACK_DESKTOP) {
+                rootfsRepository.repairStateOnStartup()
+            }
         }
     }
 

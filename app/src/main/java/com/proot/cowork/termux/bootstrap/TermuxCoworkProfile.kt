@@ -26,9 +26,8 @@ object TermuxCoworkProfile {
         if (File(prefix, "bin/proot-distro").isFile) {
             File(profileDir, "cowork-proot-distro.sh").writeText(
                 """
-                |# Bundled Ubuntu + XFCE (extracted on first app launch)
+                |# Import Ubuntu + XFCE built in Termux (proot-distro backup .tar.gz)
                 |#   proot-xfce-start ubuntu
-                |# Optional refresh: proot-xfce-install ubuntu
                 |alias pdl='proot-distro login'
                 """.trimMargin(),
             )

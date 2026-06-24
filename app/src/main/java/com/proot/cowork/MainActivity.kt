@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.lifecycleScope
 import com.proot.cowork.data.proot.RuntimeBootstrap
+import com.proot.cowork.data.prootcontainer.ProotContainerTarballLocator
 import com.proot.cowork.data.rootfs.RootfsTarballLocator
 import com.proot.cowork.data.vnc.VncPortProbe
 import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
@@ -49,19 +50,33 @@ class MainActivity : ComponentActivity() {
                         } catch (_: SecurityException) {
                             // OpenDocument grants session access; persistable is optional.
                         }
-                        app.rootfsRepository.importFromUri(uri)
+                        if (TERMUX_STACK_DESKTOP) {
+                            app.prootContainerRepository.importFromUri(uri)
+                        } else {
+                            app.rootfsRepository.importFromUri(uri)
+                        }
                     }
                 }
+            }
+
+            val dropLabel = if (TERMUX_STACK_DESKTOP) {
+                ProotContainerTarballLocator.dropDirectoryLabel(this)
+            } else {
+                RootfsTarballLocator.dropDirectoryLabel(this)
             }
 
             ProotCoworkTheme {
                 ProotCoworkApp(
                     settingsRepository = app.settingsRepository,
                     rootfsRepository = app.rootfsRepository,
-                    dropDirectoryLabel = RootfsTarballLocator.dropDirectoryLabel(this),
+                    dropDirectoryLabel = dropLabel,
                     onImportDroppedFile = {
                         scope.launch {
-                            app.rootfsRepository.importAutoDiscover()
+                            if (TERMUX_STACK_DESKTOP) {
+                                app.prootContainerRepository.importAutoDiscover()
+                            } else {
+                                app.rootfsRepository.importAutoDiscover()
+                            }
                         }
                     },
                     onImportChooseFile = {
@@ -108,7 +123,11 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (TERMUX_STACK_DESKTOP && TermuxStorageSetup.hasStorageAccess(this)) {
+            val app = application as ProotCoworkApp
             TermuxBootstrap.ensureInstalled(applicationContext)
+            lifecycleScope.launch {
+                app.prootContainerRepository.repairStateOnStartup()
+            }
         }
     }
 

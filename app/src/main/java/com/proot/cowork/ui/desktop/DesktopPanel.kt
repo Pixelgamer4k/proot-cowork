@@ -60,7 +60,12 @@ fun DesktopPanel(
         ) {
             Text(
                 text = if (TERMUX_STACK_DESKTOP) {
-                    "Termux + X11"
+                    when (desktopState) {
+                        DesktopState.NO_ROOTFS -> stringResource(R.string.no_proot_container)
+                        DesktopState.IMPORTING -> stringResource(R.string.proot_container_importing)
+                        DesktopState.RUNNING -> distroName.ifEmpty { stringResource(R.string.proot_container_ready) }
+                        else -> "Termux + X11"
+                    }
                 } else when (desktopState) {
                     DesktopState.NO_ROOTFS -> stringResource(R.string.no_rootfs)
                     DesktopState.IMPORTING -> stringResource(R.string.rootfs_importing)
@@ -98,7 +103,15 @@ fun DesktopPanel(
             contentAlignment = Alignment.Center,
         ) {
             if (TERMUX_STACK_DESKTOP) {
-                TermuxStackPanel(modifier = Modifier.fillMaxSize())
+                when (desktopState) {
+                    DesktopState.NO_ROOTFS -> NoProotContainerContent(
+                        dropDirectoryLabel = dropDirectoryLabel,
+                        onImportDroppedFile = onImportDroppedFile,
+                        onImportChooseFile = onImportChooseFile,
+                    )
+                    DesktopState.IMPORTING -> ImportingContent(importProgress)
+                    else -> TermuxStackPanel(modifier = Modifier.fillMaxSize())
+                }
             } else when (desktopState) {
                 DesktopState.NO_ROOTFS -> NoRootfsContent(
                     dropDirectoryLabel = dropDirectoryLabel,
@@ -131,6 +144,58 @@ private fun VncDesktopWithOverlay(message: String) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(12.dp))
             Text(message)
+        }
+    }
+}
+
+@Composable
+private fun NoProotContainerContent(
+    dropDirectoryLabel: String,
+    onImportDroppedFile: () -> Unit,
+    onImportChooseFile: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.padding(24.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(36.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.add_proot_container),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(
+                R.string.add_proot_container_hint,
+                dropDirectoryLabel,
+                com.proot.cowork.data.prootcontainer.ProotContainerTarballLocator.DEFAULT_FILENAME,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        FilledTonalButton(onClick = onImportDroppedFile) {
+            Text(stringResource(R.string.import_dropped_file))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        FilledTonalButton(onClick = onImportChooseFile) {
+            Text(stringResource(R.string.import_choose_file))
         }
     }
 }

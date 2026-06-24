@@ -13,7 +13,6 @@ import androidx.core.app.NotificationCompat
 import com.proot.cowork.R
 import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
-import com.proot.cowork.termux.bootstrap.TermuxUbuntuContainerInstaller
 import com.proot.cowork.termux.bootstrap.TermuxX11Demo
 import com.proot.cowork.termux.x11.X11DisplayConfig
 import com.termux.x11.X11EmbedController
@@ -71,16 +70,6 @@ class TermuxStackService : Service() {
             }
             TermuxStackSession.appendLog("Bootstrap ready")
             TermuxStackSession.setBootstrapReady(true)
-
-            val ubuntuOk = withContext(Dispatchers.IO) {
-                TermuxUbuntuContainerInstaller.installIfNeeded(
-                    applicationContext,
-                    TermuxBootstrap.prefixDir(applicationContext),
-                )
-            }
-            if (!ubuntuOk) {
-                TermuxStackSession.appendLog("Bundled Ubuntu install failed (terminal still works)")
-            }
 
             val width = X11DisplayConfig.WIDTH
             val height = X11DisplayConfig.HEIGHT

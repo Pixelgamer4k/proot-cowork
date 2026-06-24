@@ -1,61 +1,64 @@
 # Proot Cowork Rootfs Setup
 
-Build a Ubuntu proot-distro rootfs for Proot Cowork **v0.7+** (UserLAnd backend).
+Build Ubuntu + XFCE on **Termux**, export once, import into **Proot Cowork** (small APK + separate rootfs).
 
-## Prerequisites
+## Termux stack workflow (recommended)
 
-Termux from **F-Droid** + `proot-distro`. Termux:X11 is **not** required.
-
-## Quick setup (embedded X11 — recommended)
+Build the desktop in the official **Termux** app (F-Droid), then import into Cowork.
 
 ```bash
-bash 01-termux-bootstrap.sh
-bash 02-install-distro.sh
-bash 03-guest-provision.sh
-bash 04-xfce-x11.sh          # xfce4 + mesa on DISPLAY=:0 (1280x720)
+# In Termux (not Cowork yet)
+pkg install proot-distro
+proot-distro install ubuntu
+proot-xfce-install ubuntu    # from Cowork scripts, or run 04-xfce-x11.sh steps manually
+bash 07-export-proot-container.sh
 ```
 
-In the Proot-Cowork app terminal after install:
+This creates `~/proot-cowork-ubuntu.tar.gz` (proot-distro backup format).
+
+**In Proot Cowork:**
+
+1. Install the APK from CI (Termux bootstrap only — no huge rootfs inside).
+2. Tap **Import Ubuntu desktop** → choose `proot-cowork-ubuntu.tar.gz`, or copy it to:
+   `Android/data/com.proot/files/`
+3. In the app terminal:
+   ```bash
+   proot-xfce-start ubuntu
+   ```
+4. Tap **Show X11**.
+
+Re-export after you change packages inside the guest; re-import in Cowork.
+
+## Scripts (run from Termux with Cowork repo or copied scripts)
+
+| Script | Purpose |
+|--------|---------|
+| `01-termux-bootstrap.sh` | pkg + proot-distro in Termux |
+| `02-install-distro.sh` | `proot-distro install ubuntu` |
+| `03-guest-provision.sh` | user + sudo (optional) |
+| `04-xfce-x11.sh` | XFCE + Mesa for embedded X11 |
+| `07-export-proot-container.sh` | Export for Cowork import |
+
+## Legacy UserLAnd VNC path
 
 ```bash
-proot-xfce-start ubuntu
+bash 04-xfce-install.sh   # xfce4 + tightvncserver
+bash 06-export-rootfs.sh    # proot-cowork-rootfs.tar.gz → files/1/
 ```
 
-Tap **Show X11** for the full XFCE desktop at 1280×720 @ 60Hz.
+## Import formats (Cowork Termux stack)
 
-## Legacy VNC export path
-
-```bash
-bash 04-xfce-install.sh   # xfce4 + tightvncserver + expect
-bash 05-agent-tools.sh    # optional
-bash 06-export-rootfs.sh
-```
-
-Export `proot-cowork-rootfs.tar.gz` and import in the app.
-
-## What the app does (UserLAnd fork)
-
-1. Extract rootfs to `files/1/` (UserLAnd filesystem layout)
-2. Inject UserLAnd guest `support/` scripts (`startVNCServer.sh`, etc.)
-3. Run **UserLAnd's** `execInProot.sh` + `BusyboxExecutor` + `LocalServerManager`
-4. Guest runs **tightvncserver :51** (port **5951**) with XFCE
-5. Embedded VNC viewer connects with password `userland`
-
-## Required guest packages
-
-- `xfce4`, `dbus-x11`
-- `tightvncserver`, `expect` (VNC password setup)
-- User `cowork` (from `03-guest-provision.sh`)
-
-Script `04-xfce-install.sh` installs these and configures `~cowork/.vnc/xstartup`.
+| Archive layout | Supported |
+|----------------|-----------|
+| `ubuntu/manifest.json` + `ubuntu/rootfs/` | Yes (proot-distro backup) |
+| Flat rootfs (`usr/bin/bash` at top level) | Yes (wrapped as ubuntu) |
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| Missing tightvncserver | Re-run `04-xfce-install.sh` |
-| VNC auth failed | Password is `userland` (UserLAnd default) |
-| UserLAnd runtime missing | Reinstall APK from CI (includes UserLAnd jni libs) |
-| Old rootfs at `files/rootfs` | App auto-migrates to `files/1` on startup |
+| Import fails validation | Run `proot-xfce-install ubuntu` before export |
+| Black desktop / missing icons | Re-run `proot-xfce-install` in guest, re-export |
+| `proot-distro list` empty but login works | Normal after import; use `proot-xfce-start ubuntu` |
 
-See [third_party/USERLAND-NOTICE.md](../third_party/USERLAND-NOTICE.md).
+See [third_party/USERLAND-NOTICE.md](../third_party/USERLAND-NOTICE.md) for the legacy VNC backend.

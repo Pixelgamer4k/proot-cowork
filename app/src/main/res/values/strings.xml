@@ -26,6 +26,11 @@
     <string name="rootfs_importing">Importing rootfs…</string>
     <string name="rootfs_ready">Rootfs ready</string>
     <string name="no_rootfs">No rootfs installed</string>
+    <string name="add_proot_container">Import Ubuntu desktop</string>
+    <string name="add_proot_container_hint">Build in Termux, export with proot-distro backup, then drop %2$s into:\n%1$s\n\nOr choose the file with the picker.</string>
+    <string name="proot_container_importing">Importing Ubuntu + XFCE…</string>
+    <string name="proot_container_ready">Ubuntu ready</string>
+    <string name="no_proot_container">No Ubuntu container</string>
     <string name="stack_show_x11">Show X11</string>
     <string name="stack_show_termux">Show Termux</string>
     <string name="stack_termux_booting">Starting Termux…</string>

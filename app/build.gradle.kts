@@ -12,8 +12,8 @@ android {
         applicationId = "com.proot.cowork"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "0.10.6-termux-stack"
+        versionCode = 24
+        versionName = "0.10.7-termux-stack"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

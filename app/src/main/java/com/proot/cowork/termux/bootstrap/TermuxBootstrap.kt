@@ -129,10 +129,12 @@ object TermuxBootstrap {
         val prefix = prefixDir(context).absolutePath
         val home = File(prefix, "home").absolutePath
         val tmp = File(prefix, "tmp").absolutePath
+        val lib = File(prefix, "lib").absolutePath
         return arrayOf(
             "HOME=$home",
             "PREFIX=$prefix",
             "PATH=$prefix/bin",
+            "LD_LIBRARY_PATH=$lib",
             "TMPDIR=$tmp",
             "DISPLAY=:0",
             "TERM=xterm-256color",

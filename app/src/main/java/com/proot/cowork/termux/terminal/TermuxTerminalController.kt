@@ -39,7 +39,8 @@ object TermuxTerminalController {
         val newSession = TerminalSession(
             bash.absolutePath,
             home,
-            arrayOf("-l"),
+            // Leading "-" marks a login shell (same convention as Termux).
+            arrayOf("-bash"),
             TermuxBootstrap.shellEnvironment(context),
             10_000,
             client,

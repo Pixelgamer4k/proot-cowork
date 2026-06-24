@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import com.proot.cowork.R
 import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
+import com.proot.cowork.termux.bootstrap.TermuxX11Demo
 import com.termux.x11.X11EmbedController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -78,6 +79,7 @@ class TermuxStackService : Service() {
                 try {
                     val x11Ok = X11EmbedController.ensureServer(applicationContext, width, height)
                     if (x11Ok) {
+                        TermuxX11Demo.paintBackground(applicationContext)
                         TermuxStackSession.setX11Ready(true)
                         TermuxStackSession.appendLog("X11 server ready (black until a GUI app draws)")
                         updateNotification("Termux + X11 running")

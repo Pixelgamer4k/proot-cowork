@@ -104,10 +104,11 @@ DL_DIR="$(mktemp -d)"
 EXTRACT_DIR="$(mktemp -d)"
 trap 'rm -rf "$DL_DIR" "$EXTRACT_DIR"' EXIT
 
-# pkg/apt essentials + X11 smoke-test clients (aterm provides xterm).
+# pkg/apt essentials + X11 clients + proot-distro toolchain.
 queue_add \
   termux-keyring resolv-conf openssl libc++ libandroid-glob \
-  x11-repo xorg-xsetroot aterm
+  x11-repo xorg-xsetroot aterm \
+  proot-distro wget curl unzip gnupg ca-certificates pulseaudio
 
 while ((${#QUEUE[@]} > 0)); do
   pkg="${QUEUE[0]}"

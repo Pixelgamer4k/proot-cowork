@@ -106,6 +106,7 @@ object TermuxBootstrap {
         }
 
         TermuxAptConfig.applyIfNeeded(context, prefix)
+        TermuxCoworkProfile.applyIfNeeded(prefix)
         TermuxSymlinkFix.repairIfNeeded(context, prefix)
         val elfRoot = "/data/data/${context.packageName}/files"
         TermuxElfPathPatch.patchLibAptIfNeeded(

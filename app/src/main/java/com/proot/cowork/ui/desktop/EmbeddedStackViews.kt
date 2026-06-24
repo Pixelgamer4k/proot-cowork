@@ -5,19 +5,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.proot.cowork.domain.desktop.TermuxStackSession
+import com.proot.cowork.termux.bootstrap.TermuxX11Demo
 import com.proot.cowork.termux.terminal.TerminalKeyboard
 import com.proot.cowork.termux.terminal.TermuxTerminalController
 import com.termux.x11.X11EmbedController
 import com.termux.x11.X11SurfaceHost
 import com.termux.view.TerminalView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Composable
 fun EmbeddedX11Surface(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val bootstrapReady by TermuxStackSession.bootstrapReady.collectAsState()
     val (widthPx, heightPx) = remember(context) {
         val w = context.resources.displayMetrics.widthPixels.coerceAtLeast(640)
@@ -33,6 +38,13 @@ fun EmbeddedX11Surface(modifier: Modifier = Modifier) {
         },
         update = { host ->
             if (!bootstrapReady) return@AndroidView
+            val w = host.width.takeIf { it > 0 } ?: widthPx
+            val h = host.height.takeIf { it > 0 } ?: heightPx
+            scope.launch(Dispatchers.IO) {
+                if (X11EmbedController.ensureServer(context, w, h)) {
+                    TermuxX11Demo.paintBackground(context)
+                }
+            }
             X11EmbedController.pollConnect(host.lorieView) {
                 TermuxStackSession.setX11Ready(true)
             }

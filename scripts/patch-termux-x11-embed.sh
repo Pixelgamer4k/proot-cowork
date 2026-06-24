@@ -15,9 +15,23 @@ from pathlib import Path
 def patch_lorie(path: Path) -> None:
     text = path.read_text()
     marker = "COWORK_EMBED_PATCH"
-    if marker in text:
-        return
+    if marker not in text:
+        apply_lorie_embed_patches(text, path, marker)
+    else:
+        text = path.read_text()
 
+    replace_marker = "COWORK_EMBED_REPLACE_TEXT_NULL"
+    if replace_marker not in text:
+        old = """            if (a.useTermuxEKBarBehaviour && a.mExtraKeys != null)
+                a.mExtraKeys.unsetSpecialKeys();"""
+        new = """            if (a != null && a.useTermuxEKBarBehaviour && a.mExtraKeys != null)
+                a.mExtraKeys.unsetSpecialKeys(); // """ + replace_marker
+        if old not in text:
+            raise SystemExit(f"replaceText MainActivity null-check patch target missing in {path}")
+        text = text.replace(old, new)
+        path.write_text(text)
+
+def apply_lorie_embed_patches(text: str, path: Path, marker: str) -> None:
     old = """        Rect r = getHolder().getSurfaceFrame();
         MainActivity.getInstance().runOnUiThread(() -> mSurfaceCallback.surfaceChanged(getHolder(), PixelFormat.BGRA_8888, r.width(), r.height()));
     }"""

@@ -6,8 +6,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LORIE="$ROOT/third_party/termux-x11/app/src/main/java/com/termux/x11/LorieView.java"
 TOUCH="$ROOT/third_party/termux-x11/app/src/main/java/com/termux/x11/input/TouchInputHandler.java"
 CMD="$ROOT/third_party/termux-x11/app/src/main/cpp/lorie/cmdentrypoint.c"
+CMDJAVA="$ROOT/third_party/termux-x11/app/src/main/java/com/termux/x11/CmdEntryPoint.java"
 
-python3 - "$LORIE" "$TOUCH" "$CMD" <<'PY'
+python3 - "$LORIE" "$TOUCH" "$CMD" "$CMDJAVA" <<'PY'
 import sys
 from pathlib import Path
 
@@ -145,8 +146,22 @@ def patch_cmd(path: Path) -> None:
     text = text.replace(old, new)
     path.write_text(text)
 
+def patch_cmdentrypoint_java(path: Path) -> None:
+    text = path.read_text()
+    marker = "COWORK_EMBED_PATCH"
+    if marker in text:
+        return
+
+    old = "        handler = new Handler();"
+    new = "        handler = new Handler(Looper.getMainLooper()); // " + marker
+    if old not in text:
+        raise SystemExit(f"CmdEntryPoint handler patch target missing in {path}")
+    text = text.replace(old, new)
+    path.write_text(text)
+
 patch_lorie(Path(sys.argv[1]))
 patch_touch(Path(sys.argv[2]))
 patch_cmd(Path(sys.argv[3]))
+patch_cmdentrypoint_java(Path(sys.argv[4]))
 print("==> termux-x11 embed patches applied")
 PY

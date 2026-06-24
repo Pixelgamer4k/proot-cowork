@@ -85,7 +85,7 @@ class TermuxStackService : Service() {
                         TermuxStackSession.appendLog("X11 server failed (terminal still works)")
                         updateNotification("Termux running")
                     }
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     Log.e(TAG, "x11 boot failed", e)
                     TermuxStackSession.appendLog("X11 error: ${e.message}")
                 }

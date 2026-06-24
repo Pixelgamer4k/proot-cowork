@@ -22,6 +22,8 @@ import java.util.concurrent.atomic.AtomicReference
  */
 object X11EmbedController {
     private const val TAG = "X11EmbedController"
+    /** Avoid referencing [CmdEntryPoint] before its Looper/thread is ready. */
+    private const val ACTION_START = "com.termux.x11.CmdEntryPoint.ACTION_START"
     private val mainHandler = Handler(Looper.getMainLooper())
     private val serviceRef = AtomicReference<ICmdEntryInterface?>()
     private var receiverRegistered = false
@@ -30,8 +32,9 @@ object X11EmbedController {
     fun ensureServer(context: Context, widthPx: Int, heightPx: Int): Boolean {
         if (serverThread?.isAlive == true) return waitForSocket(context, 5_000)
 
-        val prefix = TermuxBootstrap.prefixDir(context)
-        if (!TermuxBootstrap.isInstalled(context)) {
+        val appContext = context.applicationContext
+        val prefix = TermuxBootstrap.prefixDir(appContext)
+        if (!TermuxBootstrap.isInstalled(appContext)) {
             Log.w(TAG, "bootstrap not installed yet; deferring X11 server start")
             return false
         }
@@ -50,9 +53,8 @@ object X11EmbedController {
         ).forEach { stale -> if (stale.exists()) stale.delete() }
 
         try {
-            CmdEntryPoint.ctx = context.applicationContext
             Os.setenv("TMPDIR", tmp.absolutePath, true)
-            Os.setenv("TERMUX_X11_OVERRIDE_PACKAGE", context.packageName, true)
+            Os.setenv("TERMUX_X11_OVERRIDE_PACKAGE", appContext.packageName, true)
             Os.setenv("PREFIX", prefix.absolutePath, true)
             Os.setenv("XKB_CONFIG_ROOT", xkbRoot.absolutePath, true)
             if (widthPx > 0 && heightPx > 0) {
@@ -64,12 +66,14 @@ object X11EmbedController {
             return false
         }
 
-        registerStartReceiver(context.applicationContext)
+        registerStartReceiver(appContext)
 
         val started = CountDownLatch(1)
         serverThread = Thread({
             try {
                 Looper.prepare()
+                // CmdEntryPoint static init must run on a thread with a Looper.
+                CmdEntryPoint.ctx = appContext
                 val ctor = CmdEntryPoint::class.java.getDeclaredConstructor(Array<String>::class.java)
                 ctor.isAccessible = true
                 ctor.newInstance(arrayOf(":0"))
@@ -82,7 +86,7 @@ object X11EmbedController {
         }, "CoworkX11Server").also { it.start() }
 
         started.await(15, TimeUnit.SECONDS)
-        return waitForSocket(context, 20_000)
+        return waitForSocket(appContext, 20_000)
     }
 
     private fun waitForSocket(context: Context, timeoutMs: Long): Boolean {
@@ -97,10 +101,10 @@ object X11EmbedController {
 
     private fun registerStartReceiver(context: Context) {
         if (receiverRegistered) return
-        val filter = IntentFilter(CmdEntryPoint.ACTION_START)
+        val filter = IntentFilter(ACTION_START)
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
-                if (intent?.action != CmdEntryPoint.ACTION_START) return
+                if (intent?.action != ACTION_START) return
                 val bundle = intent.getBundleExtra(null) ?: return
                 val binder = bundle.getBinder(null) ?: return
                 serviceRef.set(ICmdEntryInterface.Stub.asInterface(binder))

@@ -44,6 +44,14 @@ test -f "$WORKDIR/ubuntu/rootfs/usr/share/backgrounds/xfce/xfce-blue.jpg"
 
 mkdir -p "$(dirname "$OUTPUT")"
 echo "==> Packing $(basename "$OUTPUT")"
-tar -C "$WORKDIR" -czf "$OUTPUT" ubuntu
+tar -C "$WORKDIR" -czf "$OUTPUT" \
+  --exclude='ubuntu/rootfs/var/lib/snapd' \
+  --exclude='ubuntu/rootfs/snap' \
+  --exclude='ubuntu/rootfs/proc' \
+  --exclude='ubuntu/rootfs/sys' \
+  --exclude='ubuntu/rootfs/dev' \
+  --exclude='ubuntu/rootfs/run' \
+  --exclude='ubuntu/rootfs/tmp' \
+  ubuntu
 ls -lh "$OUTPUT"
 echo "==> Rootfs ready for Cowork import: $OUTPUT"

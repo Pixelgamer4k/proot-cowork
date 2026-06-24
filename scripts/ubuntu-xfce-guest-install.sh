@@ -108,6 +108,8 @@ rsync -aHAXx --delete \
   --exclude=/dev \
   --exclude=/tmp \
   --exclude=/run \
+  --exclude=/var/lib/snapd \
+  --exclude=/snap \
   / /out/
 
 echo "==> Guest install complete"

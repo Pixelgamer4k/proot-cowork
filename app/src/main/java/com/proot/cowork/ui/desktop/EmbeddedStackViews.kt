@@ -8,8 +8,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.termux.terminal.TermuxTerminalController
-import com.proot.cowork.termux.x11.X11EmbedController
-import com.proot.cowork.termux.x11.X11SurfaceHost
+import com.termux.x11.X11EmbedController
+import com.termux.x11.X11SurfaceHost
 import com.termux.view.TerminalView
 
 @Composable

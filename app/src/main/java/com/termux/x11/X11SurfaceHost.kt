@@ -1,9 +1,8 @@
-package com.proot.cowork.termux.x11
+package com.termux.x11
 
 import android.content.Context
 import android.view.MotionEvent
 import android.widget.FrameLayout
-import com.termux.x11.LorieView
 import com.termux.x11.input.InputEventSender
 import com.termux.x11.input.InputStub
 

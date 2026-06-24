@@ -14,7 +14,7 @@ import androidx.core.app.NotificationCompat
 import com.proot.cowork.R
 import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
-import com.proot.cowork.termux.x11.X11EmbedController
+import com.termux.x11.X11EmbedController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

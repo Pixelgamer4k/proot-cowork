@@ -1,4 +1,4 @@
-package com.proot.cowork.termux.x11
+package com.termux.x11
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -11,9 +11,6 @@ import android.os.ParcelFileDescriptor
 import android.system.Os
 import android.util.Log
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
-import com.termux.x11.CmdEntryPoint
-import com.termux.x11.ICmdEntryInterface
-import com.termux.x11.LorieView
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -27,7 +24,7 @@ object X11EmbedController {
     private const val TAG = "X11EmbedController"
     private val mainHandler = Handler(Looper.getMainLooper())
     private val serviceRef = AtomicReference<ICmdEntryInterface?>()
-  private var receiverRegistered = false
+    private var receiverRegistered = false
     private var serverThread: Thread? = null
 
     fun ensureServer(context: Context, widthPx: Int, heightPx: Int): Boolean {

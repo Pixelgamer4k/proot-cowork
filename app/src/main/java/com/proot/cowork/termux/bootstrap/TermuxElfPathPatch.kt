@@ -6,13 +6,37 @@ import java.io.RandomAccessFile
 
 /**
  * Patches null-terminated path strings in ELF binaries when the replacement fits in-place.
- * Skips libapt* (use [TermuxAptWrapper] instead — patching corrupts apt Dir:: paths).
+ * libapt is patched separately via [patchLibAptIfNeeded] using only the shorter elfRoot path.
  */
 object TermuxElfPathPatch {
 
     private const val TAG = "TermuxElfPathPatch"
     private const val LEGACY_ROOT = "/data/data/com.termux/files"
     private const val LEGACY_ROOT_USER = "/data/user/0/com.termux/files"
+
+    /** Patch libapt/apt-key paths baked into libapt-pkg (com.termux -> com.proot). */
+    fun patchLibAptIfNeeded(prefix: File, elfRoot: String, filesRoot: String): Boolean {
+        val marker = File(prefix, ".termux_libapt_patched_v1")
+        if (marker.isFile) return true
+
+        val targets = mutableListOf<File>()
+        File(prefix, "lib").listFiles()
+            ?.filter { it.isFile && it.name.startsWith("libapt") }
+            ?.let { targets.addAll(it) }
+        listOf("apt.real", "gpgv", "gpg").forEach { name ->
+            val bin = File(prefix, "bin/$name")
+            if (bin.isFile) targets.add(bin)
+        }
+
+        var patched = 0
+        targets.forEach { file ->
+            patched += patchFile(file, LEGACY_ROOT, elfRoot)
+            patched += patchFile(file, LEGACY_ROOT_USER, filesRoot)
+        }
+        marker.createNewFile()
+        Log.i(TAG, "libapt: patched $patched strings in ${targets.size} files (elfRoot=$elfRoot)")
+        return true
+    }
 
     fun patchBinary(file: File, elfRoot: String, filesRoot: String): Int {
         if (!file.isFile || !isElf(file)) return 0

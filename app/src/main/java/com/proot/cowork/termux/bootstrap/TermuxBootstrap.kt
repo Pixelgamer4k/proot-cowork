@@ -107,6 +107,8 @@ object TermuxBootstrap {
         }
 
         TermuxSymlinkFix.repairIfNeeded(context, prefix)
+        val elfRoot = "/data/data/${context.packageName}/files"
+        TermuxElfPathPatch.patchLibAptIfNeeded(prefix, elfRoot, context.filesDir.absolutePath)
         TermuxAptWrapper.installIfNeeded(context, prefix)
 
         // installBash runs before path patch; re-patch copied libbash (RUNPATH + strings).

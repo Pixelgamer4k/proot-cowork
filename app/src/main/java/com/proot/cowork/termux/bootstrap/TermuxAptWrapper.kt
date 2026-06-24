@@ -8,8 +8,8 @@ import java.io.File
 import java.io.RandomAccessFile
 
 /**
- * Wraps apt to pass absolute Dir::* overrides. ELF path patching breaks libapt's
- * built-in Dir strings; CLI -o flags fix pkg reliably.
+ * Wraps apt with absolute Dir::* overrides. libapt still embeds com.termux paths for
+ * apt-key and apt.conf.d; [TermuxElfPathPatch.patchLibAptIfNeeded] fixes those ELFs.
  */
 object TermuxAptWrapper {
 
@@ -17,14 +17,15 @@ object TermuxAptWrapper {
     private const val HELPER = "cowork-apt"
 
     fun installIfNeeded(context: Context, prefix: File) {
-        val marker = File(prefix, ".termux_apt_wrapped_v1")
+        val marker = File(prefix, ".termux_apt_wrapped_v2")
         if (marker.isFile) return
 
+        File(prefix, ".termux_apt_wrapped_v1").delete()
         val cacheRoot = context.cacheDir.absolutePath
         writeHelperScript(prefix, cacheRoot)
         ensureAptWrapper(prefix)
         marker.createNewFile()
-        Log.i(TAG, "installed apt wrapper with Dir overrides")
+        Log.i(TAG, "installed apt wrapper with absolute Dir overrides")
     }
 
     private fun writeHelperScript(prefix: File, cacheRoot: String) {
@@ -34,16 +35,17 @@ object TermuxAptWrapper {
         helper.writeText(
             """
             |#!$sh
-            |. "$prefixPath/etc/profile"
-            |exec "${'$'}PREFIX/bin/apt.real" \
-            |  -o Dir::Etc="${'$'}PREFIX/etc/apt" \
-            |  -o Dir::State="${'$'}PREFIX/var/lib/apt" \
-            |  -o Dir::State::status="${'$'}PREFIX/var/lib/dpkg/status" \
+            |exec "$prefixPath/bin/apt.real" \
+            |  -o Dir::Etc="$prefixPath/etc/apt" \
+            |  -o Dir::State="$prefixPath/var/lib/apt" \
+            |  -o Dir::State::status="$prefixPath/var/lib/dpkg/status" \
+            |  -o Dir::State::tmpdir="$prefixPath/tmp" \
             |  -o Dir::Cache="$cacheRoot/apt" \
             |  -o Dir::Cache::archives="$cacheRoot/apt/archives" \
-            |  -o Dir::Bin::methods="${'$'}PREFIX/lib/apt/methods" \
-            |  -o Dir::Bin::dpkg="${'$'}PREFIX/bin/dpkg" \
-            |  -o Dir::Log="${'$'}PREFIX/var/log/apt" \
+            |  -o Dir::Bin::methods="$prefixPath/lib/apt/methods" \
+            |  -o Dir::Bin::dpkg="$prefixPath/bin/dpkg" \
+            |  -o Dir::Bin::gpg="$prefixPath/bin/gpgv" \
+            |  -o Dir::Log="$prefixPath/var/log/apt" \
             |  "${'$'}@"
             """.trimMargin(),
         )
@@ -68,7 +70,6 @@ object TermuxAptWrapper {
         aptWrapper.writeText(
             """
             |#!$prefixPath/bin/sh
-            |. "$prefixPath/etc/profile"
             |exec "$prefixPath/bin/$HELPER" "${'$'}@"
             """.trimMargin(),
         )

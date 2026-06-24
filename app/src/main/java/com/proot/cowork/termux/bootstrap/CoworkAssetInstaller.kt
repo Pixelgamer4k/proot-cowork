@@ -10,11 +10,12 @@ import java.io.File
 object CoworkAssetInstaller {
 
     private const val TAG = "CoworkAssetInstaller"
-    private const val MARKER = ".cowork_assets_v4"
+    private const val MARKER = ".cowork_assets_v6"
 
     private val SCRIPTS = listOf(
         "proot-xfce-install.sh",
         "proot-xfce-start.sh",
+        "proot-xfce-export.sh",
     )
 
     fun installIfNeeded(context: Context, prefix: File) {
@@ -38,8 +39,33 @@ object CoworkAssetInstaller {
         }
 
         installXfcePerfConfig(context, shareDir)
+        installContainerExportAssets(context, shareDir)
         marker.createNewFile()
         Log.i(TAG, "installed proot XFCE scripts under ${shareDir.absolutePath}")
+    }
+
+    private fun installContainerExportAssets(context: Context, shareDir: File) {
+        val manifest = File(shareDir, "ubuntu-container-manifest.json")
+        try {
+            context.assets.open("cowork/ubuntu-container-manifest.json").use { input ->
+                manifest.outputStream().use { output -> input.copyTo(output) }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "ubuntu container manifest missing: ${e.message}")
+        }
+
+        val sysdataDir = File(shareDir, "ubuntu-sysdata").also { it.mkdirs() }
+        try {
+            context.assets.list("cowork/ubuntu-sysdata")?.forEach { name ->
+                val dest = File(sysdataDir, name)
+                if (dest.isFile) return@forEach
+                context.assets.open("cowork/ubuntu-sysdata/$name").use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "ubuntu sysdata stubs missing: ${e.message}")
+        }
     }
 
     private fun installXfcePerfConfig(context: Context, shareDir: File) {

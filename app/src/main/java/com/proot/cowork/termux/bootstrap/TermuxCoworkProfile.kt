@@ -27,6 +27,7 @@ object TermuxCoworkProfile {
             File(profileDir, "cowork-proot-distro.sh").writeText(
                 """
                 |# Import Ubuntu + XFCE built in Termux (proot-distro backup .tar.gz)
+                |#   proot-xfce-export ubuntu
                 |#   proot-xfce-start ubuntu
                 |alias pdl='proot-distro login'
                 """.trimMargin(),

@@ -2,16 +2,47 @@
 
 Build Ubuntu + XFCE on **Termux**, export once, import into **Proot Cowork** (small APK + separate rootfs).
 
-## Termux stack workflow (recommended)
+## F-Droid Termux (full workflow)
 
-Build the desktop in the official **Termux** app (F-Droid), then import into Cowork.
+Use the official **Termux** app from F-Droid (not Play Store). Clone this repo on the phone or copy `rootfs-setup/` to Termux.
 
 ```bash
-# In Termux (not Cowork yet)
-pkg install proot-distro
+# One-time: install helper commands into Termux $PREFIX/bin
+cd ~/Proot-Cowork/rootfs-setup
+bash 00-install-termux-scripts.sh
+
+# Bootstrap + Ubuntu + XFCE
+bash 01-termux-bootstrap.sh
+bash 02-install-distro.sh
+proot-xfce-install ubuntu
+
+# Export for Cowork (~2–3 GB tarball)
+proot-xfce-export ubuntu
+# or: bash 07-export-proot-container.sh
+```
+
+`00-install-termux-scripts.sh` installs `proot-xfce-install`, `proot-xfce-export`, and `proot-xfce-start` plus manifest/sysdata templates under `$PREFIX/share/cowork/` — no Cowork APK required for the build step.
+
+Output: `~/proot-cowork-ubuntu.tar.gz`
+
+```bash
+# Optional: shrink before export
+CLEAN_BEFORE_EXPORT=1 proot-xfce-export ubuntu
+
+# Custom output path
+OUTPUT=/sdcard/Download/ubuntu.tar.gz proot-xfce-export ubuntu
+```
+
+## Termux stack workflow (short)
+
+Build the desktop in **Termux**, then import into **Proot Cowork**.
+
+```bash
+# After 00-install-termux-scripts.sh
+pkg install proot-distro   # if not already
 proot-distro install ubuntu
-proot-xfce-install ubuntu    # from Cowork scripts, or run 04-xfce-x11.sh steps manually
-bash 07-export-proot-container.sh
+proot-xfce-install ubuntu
+proot-xfce-export ubuntu
 ```
 
 This creates `~/proot-cowork-ubuntu.tar.gz` (proot-distro backup format).
@@ -33,11 +64,13 @@ Re-export after you change packages inside the guest; re-import in Cowork.
 
 | Script | Purpose |
 |--------|---------|
+| `00-install-termux-scripts.sh` | Install `proot-xfce-*` commands on F-Droid Termux |
 | `01-termux-bootstrap.sh` | pkg + proot-distro in Termux |
 | `02-install-distro.sh` | `proot-distro install ubuntu` |
 | `03-guest-provision.sh` | user + sudo (optional) |
 | `04-xfce-x11.sh` | XFCE + Mesa for embedded X11 |
-| `07-export-proot-container.sh` | Export for Cowork import |
+| `07-export-proot-container.sh` | Export wrapper → `proot-xfce-export` |
+| `proot-xfce-export.sh` | Canonical export script (also bundled in Cowork APK) |
 
 ## Legacy UserLAnd VNC path
 

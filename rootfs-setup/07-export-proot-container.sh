@@ -1,30 +1,18 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Export a proot-distro Ubuntu + XFCE container for import into Proot Cowork.
+# Export Ubuntu + XFCE for Proot Cowork (F-Droid Termux entry point).
 set -euo pipefail
 
-DISTRO="${DISTRO:-ubuntu}"
-OUTPUT="${OUTPUT:-$HOME/proot-cowork-ubuntu.tar.gz}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if ! command -v proot-distro >/dev/null; then
-  echo "ERROR: proot-distro not found" >&2
-  exit 1
-fi
+for candidate in \
+  "${PREFIX:-}/share/cowork/proot-xfce-export.sh" \
+  "$SCRIPT_DIR/proot-xfce-export.sh" \
+  "$SCRIPT_DIR/../app/src/main/assets/cowork/proot-xfce-export.sh"; do
+  if [[ -f "$candidate" ]]; then
+    exec bash "$candidate" "$@"
+  fi
+done
 
-ROOTFS="$PREFIX/var/lib/proot-distro/containers/$DISTRO/rootfs"
-if [[ ! -f "$ROOTFS/usr/bin/xfce4-session" && ! -f "$ROOTFS/usr/bin/startxfce4" ]]; then
-  echo "ERROR: XFCE not installed in $DISTRO. Run: proot-xfce-install $DISTRO" >&2
-  exit 1
-fi
-
-echo "==> Exporting proot-distro backup for Cowork import"
-echo "    Container: $DISTRO"
-echo "    Output: $OUTPUT"
-
-if proot-distro backup --help 2>/dev/null | grep -q '\-o'; then
-  proot-distro backup "$DISTRO" -o "$OUTPUT"
-else
-  proot-distro backup "$DISTRO" "$OUTPUT"
-fi
-
-ls -lh "$OUTPUT"
-echo "==> Copy $OUTPUT to Cowork (Choose file or drop into Android/data/com.proot/files/)"
+echo "ERROR: proot-xfce-export not found." >&2
+echo "  Run: bash $SCRIPT_DIR/00-install-termux-scripts.sh" >&2
+exit 1

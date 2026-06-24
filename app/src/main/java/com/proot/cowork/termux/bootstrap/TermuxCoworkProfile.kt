@@ -6,10 +6,11 @@ import java.io.File
 object TermuxCoworkProfile {
 
     fun applyIfNeeded(prefix: File) {
-        val marker = File(prefix, ".termux_cowork_profile_v2")
+        val marker = File(prefix, ".termux_cowork_profile_v3")
         if (marker.isFile) return
 
         File(prefix, ".termux_cowork_profile_v1").delete()
+        File(prefix, ".termux_cowork_profile_v2").delete()
         val profileDir = File(prefix, "etc/profile.d").also { it.mkdirs() }
         File(profileDir, "cowork-env.sh").writeText(
             """
@@ -25,10 +26,9 @@ object TermuxCoworkProfile {
         if (File(prefix, "bin/proot-distro").isFile) {
             File(profileDir, "cowork-proot-distro.sh").writeText(
                 """
-                |# proot-distro + XFCE on embedded X11 (:0)
-                |#   proot-distro install ubuntu
-                |#   proot-xfce-install ubuntu
+                |# Bundled Ubuntu + XFCE (extracted on first app launch)
                 |#   proot-xfce-start ubuntu
+                |# Optional refresh: proot-xfce-install ubuntu
                 |alias pdl='proot-distro login'
                 """.trimMargin(),
             )

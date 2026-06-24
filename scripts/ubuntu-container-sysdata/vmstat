@@ -1,0 +1,9 @@
+nr_free_pages 1743136
+nr_zone_inactive_anon 179281
+nr_zone_active_anon 7183
+nr_zone_inactive_file 22858
+nr_zone_active_file 51328
+nr_zone_unevictable 642
+nr_zone_write_pending 0
+nr_mlock 0
+nr_bounce 0

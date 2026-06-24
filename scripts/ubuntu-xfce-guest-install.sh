@@ -1,54 +1,29 @@
 #!/usr/bin/env bash
-# Install or refresh XFCE inside the bundled Ubuntu proot-distro container.
+# Install full Ubuntu + XFCE inside a Docker arm64 root (CI build).
 set -euo pipefail
 
-DISTRO="${1:-ubuntu}"
-
-if ! command -v proot-distro >/dev/null; then
-  echo "proot-distro not found — reinstall app or run: pkg install proot-distro" >&2
-  exit 1
-fi
-
-CONTAINER_ROOT="${PREFIX:-/data/data/com.termux/files/usr}/var/lib/proot-distro/containers/${DISTRO}/rootfs"
-if [[ -f "$CONTAINER_ROOT/usr/bin/xfce4-session" && -f "$CONTAINER_ROOT/usr/bin/startxfce4" ]]; then
-  echo "==> Ubuntu + XFCE already installed (bundled with app)"
-  echo "    Start with: proot-xfce-start $DISTRO"
-  exit 0
-fi
-
-echo "==> Installing XFCE desktop + graphics stack in proot-distro: $DISTRO"
-echo "    Target: DISPLAY=:0 (1280x720 @ 60Hz embedded X11)"
-
-proot-distro login "$DISTRO" --shared-tmp -- bash -lc '
-set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-if command -v apt-get >/dev/null; then
-  apt-get update
-  apt-get install -y \
-    task-xfce-desktop \
-    dbus dbus-x11 sudo \
-    firefox thunar thunar-archive-plugin thunar-volman \
-    libreoffice-gtk3 \
-    build-essential git vim curl wget nano less \
-    mesa-utils libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libgbm1 libgl1 \
-    greybird-gtk-theme elementary-xfce-icon-theme librsvg2-common gtk2-engines-pixbuf \
-    fonts-dejavu fonts-liberation fonts-noto-color-emoji fontconfig \
-    pulseaudio pavucontrol \
-    xfce4-screenshooter xfce4-taskmanager xfce4-notes \
-    ristretto parole xarchiver file-roller \
-    x11-xserver-utils x11-utils
-elif command -v apk >/dev/null; then
-  apk update
-  apk add xfce4 xfce4-terminal dbus dbus-x11 mesa-dri-gallium mesa-gl mesa-egl \
-    mesa-utils font-dejavu fontconfig adwaita-icon-theme ttf-dejavu xorg-server-utils
-else
-  echo "Unsupported distro — use ubuntu, debian, or alpine" >&2
-  exit 1
-fi
+apt-get update
+apt-get install -y ca-certificates rsync
 
-for home in /root /home/*; do
-  [ -d "$home" ] || continue
+apt-get install -y \
+  task-xfce-desktop \
+  dbus dbus-x11 sudo \
+  firefox \
+  thunar thunar-archive-plugin thunar-media-tags-plugin thunar-volman \
+  libreoffice-gtk3 \
+  build-essential git vim curl wget nano less \
+  mesa-utils libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libgbm1 libgl1 \
+  greybird-gtk-theme elementary-xfce-icon-theme librsvg2-common gtk2-engines-pixbuf \
+  fonts-dejavu fonts-liberation fonts-noto-color-emoji fontconfig \
+  pulseaudio pavucontrol \
+  xfce4-screenshooter xfce4-taskmanager xfce4-notes \
+  ristretto parole xarchiver file-roller \
+  x11-xserver-utils x11-utils
+
+# Desktop look-and-feel for root (default proot-distro login user).
+for home in /root; do
   xfconf_dir="$home/.config/xfce4/xfconf/xfce-perchannel-xml"
   mkdir -p "$xfconf_dir"
 
@@ -101,7 +76,18 @@ if command -v gtk-update-icon-cache >/dev/null; then
   gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
 fi
 
-echo "==> XFCE + Mesa installed (Greybird theme, wallpaper, compositor off)"
-'
+apt-get clean
+rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-echo "==> Done. Start with: proot-xfce-start $DISTRO"
+echo "==> Exporting rootfs to /out"
+mkdir -p /out
+rsync -aHAXx --delete \
+  --exclude=/out \
+  --exclude=/proc \
+  --exclude=/sys \
+  --exclude=/dev \
+  --exclude=/tmp \
+  --exclude=/run \
+  / /out/
+
+echo "==> Guest install complete"

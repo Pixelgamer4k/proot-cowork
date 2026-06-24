@@ -1,6 +1,10 @@
 package com.proot.cowork.termux.bootstrap
 
 import android.content.Context
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
+import android.util.Log
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.BufferedInputStream
 import java.io.File
@@ -8,6 +12,8 @@ import java.io.InputStream
 import java.util.zip.GZIPInputStream
 
 object AssetExtractor {
+
+  private const val TAG = "TermuxBootstrap"
 
     fun extractGzipTar(input: InputStream, targetDir: File): Boolean {
         val marker = File(targetDir, ".extraction_complete")
@@ -23,14 +29,17 @@ object AssetExtractor {
                 } else if (entry.isSymbolicLink) {
                     outFile.parentFile?.mkdirs()
                     outFile.delete()
-                    Runtime.getRuntime().exec(
-                        arrayOf("ln", "-sf", entry.linkName, outFile.absolutePath),
-                    ).waitFor()
+                    try {
+                        Os.symlink(entry.linkName, outFile.absolutePath)
+                    } catch (e: ErrnoException) {
+                        Log.e(TAG, "symlink failed: ${outFile.absolutePath} -> ${entry.linkName}", e)
+                        return false
+                    }
                 } else {
                     outFile.parentFile?.mkdirs()
                     outFile.outputStream().use { out -> tar.copyTo(out) }
                     if (entry.mode and 0b001_001_001 != 0) {
-                        outFile.setExecutable(true, false)
+                        chmodExecutable(outFile)
                     }
                 }
                 entry = tar.nextEntry
@@ -39,45 +48,75 @@ object AssetExtractor {
         marker.createNewFile()
         return true
     }
+
+    private fun chmodExecutable(file: File) {
+        try {
+            Os.chmod(file.absolutePath, OsConstants.S_IRUSR or OsConstants.S_IWUSR or OsConstants.S_IXUSR)
+        } catch (_: ErrnoException) {
+            file.setExecutable(true, false)
+        }
+    }
 }
 
 object TermuxBootstrap {
+
+    private const val TAG = "TermuxBootstrap"
 
     fun prefixDir(context: Context): File = File(context.filesDir, "usr")
 
     fun bashExecutable(context: Context): File = File(prefixDir(context), "bin/bash")
 
-    fun isInstalled(context: Context): Boolean {
-        val marker = File(prefixDir(context), ".extraction_complete")
-        return marker.isFile && bashExecutable(context).canExecute()
+    fun nativeBash(context: Context): File =
+        File(context.applicationInfo.nativeLibraryDir, "libbash.so")
+
+    /** Path to pass to TerminalSession — prefers prefix bin/bash, falls back to libbash.so. */
+    fun shellExecutable(context: Context): File? {
+        val bash = bashExecutable(context)
+        if (bash.canExecute()) return bash
+        val native = nativeBash(context)
+        return native.takeIf { it.canExecute() }
     }
+
+    fun isInstalled(context: Context): Boolean = shellExecutable(context) != null
 
     fun ensureInstalled(context: Context): Boolean {
         val prefix = prefixDir(context)
         val marker = File(prefix, ".extraction_complete")
-        if (marker.isFile) {
-            linkBash(context)
-            ensureLayout(prefix)
-            return bashExecutable(context).canExecute()
+
+        if (!marker.isFile) {
+            context.assets.open("bootstrap.bin").use { input ->
+                if (!AssetExtractor.extractGzipTar(input, prefix)) return false
+            }
         }
 
-        context.assets.open("bootstrap.bin").use { input ->
-            if (!AssetExtractor.extractGzipTar(input, prefix)) return false
+        if (!linkBash(context)) {
+            Log.e(TAG, "failed to link bash into ${bashExecutable(context).absolutePath}")
+            return false
         }
-        linkBash(context)
         ensureLayout(prefix)
-        return bashExecutable(context).canExecute()
+
+        val ok = shellExecutable(context) != null
+        if (!ok) {
+            marker.delete()
+        }
+        return ok
     }
 
-    private fun linkBash(context: Context) {
-        val nativeBash = File(context.applicationInfo.nativeLibraryDir, "libbash.so")
+    private fun linkBash(context: Context): Boolean {
+        val nativeBash = nativeBash(context)
+        if (!nativeBash.isFile) {
+            Log.e(TAG, "missing ${nativeBash.absolutePath}")
+            return false
+        }
         val binDir = File(prefixDir(context), "bin").also { it.mkdirs() }
         val bash = File(binDir, "bash")
-        if (nativeBash.isFile) {
+        return try {
             if (bash.exists()) bash.delete()
-            Runtime.getRuntime().exec(
-                arrayOf("ln", "-sf", nativeBash.absolutePath, bash.absolutePath),
-            ).waitFor()
+            Os.symlink(nativeBash.absolutePath, bash.absolutePath)
+            true
+        } catch (e: ErrnoException) {
+            Log.e(TAG, "Os.symlink bash failed", e)
+            false
         }
     }
 

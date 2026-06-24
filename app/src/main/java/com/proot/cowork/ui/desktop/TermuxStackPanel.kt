@@ -34,6 +34,8 @@ fun TermuxStackPanel(
     val frontLayer by TermuxStackSession.frontLayer.collectAsState()
     val x11Ready by TermuxStackSession.x11Ready.collectAsState()
     val termuxReady by TermuxStackSession.termuxReady.collectAsState()
+    val bootstrapReady by TermuxStackSession.bootstrapReady.collectAsState()
+    val logLines by TermuxStackSession.logLines.collectAsState()
 
     Box(modifier = modifier.fillMaxSize()) {
         val x11Z = if (frontLayer == StackFrontLayer.X11) 1f else 0f
@@ -57,7 +59,10 @@ fun TermuxStackPanel(
         ) {
             termuxLayer(Modifier.fillMaxSize())
             if (!termuxReady) {
-                LayerBootOverlay(stringResource(R.string.stack_termux_booting))
+                val status = logLines.lastOrNull()
+                    ?: if (!bootstrapReady) stringResource(R.string.stack_termux_booting)
+                    else stringResource(R.string.stack_termux_booting)
+                LayerBootOverlay(status)
             }
         }
 

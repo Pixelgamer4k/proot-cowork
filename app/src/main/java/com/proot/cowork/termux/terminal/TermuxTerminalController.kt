@@ -14,8 +14,7 @@ object TermuxTerminalController {
             terminalView.attachSession(session)
             return true
         }
-        val bash = TermuxBootstrap.bashExecutable(context)
-        if (!bash.canExecute()) return false
+        val bash = TermuxBootstrap.shellExecutable(context) ?: return false
 
         val home = TermuxBootstrap.prefixDir(context).resolve("home").absolutePath
         val client = CoworkTerminalSessionClient(terminalView)

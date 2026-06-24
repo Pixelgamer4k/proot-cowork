@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.util.DisplayMetrics
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.proot.cowork.R
@@ -75,17 +74,17 @@ class TermuxStackService : Service() {
             val height = (width * 9 / 16).coerceAtLeast(360)
 
             TermuxStackSession.appendLog("Starting X11 server :0…")
-            val x11Ok = withContext(Dispatchers.IO) {
-                X11EmbedController.ensureServer(applicationContext, width, height)
+            scope.launch(Dispatchers.IO) {
+                val x11Ok = X11EmbedController.ensureServer(applicationContext, width, height)
+                if (x11Ok) {
+                    TermuxStackSession.setX11Ready(true)
+                    TermuxStackSession.appendLog("X11 server ready (black until a GUI app draws)")
+                    updateNotification("Termux + X11 running")
+                } else {
+                    TermuxStackSession.appendLog("X11 server failed (terminal still works)")
+                    updateNotification("Termux running")
+                }
             }
-            if (!x11Ok) {
-                TermuxStackSession.appendLog("X11 server failed to start")
-                stopSelf()
-                return
-            }
-            TermuxStackSession.setX11Ready(true)
-            TermuxStackSession.appendLog("X11 server ready (black until a GUI app draws)")
-            updateNotification("Termux + X11 running")
         } catch (e: Exception) {
             Log.e(TAG, "boot failed", e)
             TermuxStackSession.appendLog("Error: ${e.message}")

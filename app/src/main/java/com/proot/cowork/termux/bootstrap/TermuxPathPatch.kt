@@ -16,18 +16,19 @@ object TermuxPathPatch {
     private const val LEGACY_ROOT_USER = "/data/user/0/com.termux/files"
 
     fun applyIfNeeded(context: Context, prefix: File): Boolean {
-        val marker = File(prefix, ".termux_paths_patched_v2")
+        val marker = File(prefix, ".termux_paths_patched_v3")
         if (marker.isFile) return true
 
         val filesRoot = context.filesDir.absolutePath
-        val hadV1 = File(prefix, ".termux_paths_patched_v1").isFile
-        if (!hadV1) {
+        val hadTree = File(prefix, ".termux_paths_patched_v1").isFile ||
+            File(prefix, ".termux_paths_patched_v2").isFile
+        if (!hadTree) {
             Log.i(TAG, "Patching Termux bootstrap paths -> $filesRoot")
             patchTree(prefix, filesRoot)
-        } else {
-            Log.i(TAG, "Repairing login exec (POSIX sh lacks exec -a)")
         }
         patchLoginExec(prefix)
+        TermuxStorageSetup.patchSetupStorageScript(prefix)
+        TermuxElfPathPatch.applyIfNeeded(prefix, filesRoot)
         marker.createNewFile()
         return true
     }
@@ -55,25 +56,39 @@ object TermuxPathPatch {
 
     private fun looksLikeText(bytes: ByteArray): Boolean {
         val sample = bytes.take(minOf(bytes.size, 512))
-        return sample.all { b -> b == '\n'.code.toByte() || b == '\r'.code.toByte() || b == '\t'.code.toByte() || b in 32..126 }
+        return sample.all { b ->
+            b == '\n'.code.toByte() || b == '\r'.code.toByte() || b == '\t'.code.toByte() || b in 32..126
+        }
     }
 
     /**
-     * libbash.so still has Termux paths compiled in; avoid `bash -l` reading them.
-     * Source profile from patched login script, then start an interactive bash.
-     * Must use POSIX sh syntax — login runs under Termux `sh`, not bash (`exec -a` fails).
+     * libapt and other ELFs still reference `/data/data/com.termux/files`.
+     * When proot is available, bind-mount the real files dir onto that path.
      */
     private fun patchLoginExec(prefix: File) {
         val login = File(prefix, "bin/login")
         if (!login.isFile) return
         val prefixPath = prefix.absolutePath
-        val posixBlock = posixLoginExecBlock(prefixPath)
+        val targetBlock = loginExecBlock(prefixPath)
         var content = login.readText()
-        if (content.contains("exec \"$prefixPath/bin/bash\" --noprofile")) {
-            return
-        }
+        if (content.contains("COWORK_PROOT_BIND")) return
 
-        val stockBlock = """
+        val replacements = listOf(
+            loginExecBlockDirectBash(prefixPath),
+            brokenBashismBlock(prefixPath),
+            stockBlock(),
+        )
+        for (old in replacements) {
+            if (content.contains(old)) {
+                content = content.replace(old, targetBlock)
+                login.writeText(content)
+                return
+            }
+        }
+        Log.w(TAG, "login exec block not found; leaving login script unchanged")
+    }
+
+    private fun stockBlock() = """
 if [ -n "${'$'}TERM" ]; then
 	exec "${'$'}SHELL" -l "${'$'}@"
 else
@@ -81,7 +96,7 @@ else
 fi
 """.trimIndent()
 
-        val brokenBashismBlock = """
+    private fun brokenBashismBlock(prefixPath: String) = """
 if [ -n "${'$'}TERM" ]; then
 	. "$prefixPath/etc/profile"
 	exec -a "-bash" "${'$'}SHELL" --noprofile --rcfile "$prefixPath/etc/bash.bashrc" -i "${'$'}@"
@@ -90,20 +105,31 @@ else
 fi
 """.trimIndent()
 
-        content = when {
-            content.contains(brokenBashismBlock) -> content.replace(brokenBashismBlock, posixBlock)
-            content.contains(stockBlock) -> content.replace(stockBlock, posixBlock)
-            else -> {
-                Log.w(TAG, "login exec block not found; leaving login script unchanged")
-                return
-            }
-        }
-        login.writeText(content)
-    }
-
-    private fun posixLoginExecBlock(prefixPath: String): String = """
+    private fun loginExecBlockDirectBash(prefixPath: String) = """
 if [ -n "${'$'}TERM" ]; then
 	. "$prefixPath/etc/profile"
+	exec "$prefixPath/bin/bash" --noprofile --rcfile "$prefixPath/etc/bash.bashrc" -i "${'$'}@"
+else
+	exec "${'$'}SHELL" "${'$'}@"
+fi
+""".trimIndent()
+
+    private fun loginExecBlock(prefixPath: String) = """
+if [ -n "${'$'}TERM" ]; then
+	. "$prefixPath/etc/profile"
+	export PROOT_NO_SECCOMP=1
+	_real="${'$'}{TERMUX__ROOTFS_DIR:-$(dirname "$prefixPath")}"
+	# COWORK_PROOT_BIND: map hardcoded com.termux paths for apt/pkg ELFs
+	if [ -x "$prefixPath/bin/proot" ]; then
+		_proot_bind="-b ${'$'}_real:/data/data/com.termux/files"
+		for _mnt in /storage /storage/emulated /storage/emulated/0; do
+			[ -d "${'$'}_mnt" ] && _proot_bind="${'$'}_proot_bind -b ${'$'}_mnt:${'$'}_mnt"
+		done
+		[ -d /storage/emulated/0 ] && _proot_bind="${'$'}_proot_bind -b /storage/emulated/0:/sdcard"
+		# shellcheck disable=SC2086
+		exec "$prefixPath/bin/proot" ${'$'}_proot_bind -0 \
+			"$prefixPath/bin/bash" --noprofile --rcfile "$prefixPath/etc/bash.bashrc" -i "${'$'}@"
+	fi
 	exec "$prefixPath/bin/bash" --noprofile --rcfile "$prefixPath/etc/bash.bashrc" -i "${'$'}@"
 else
 	exec "${'$'}SHELL" "${'$'}@"

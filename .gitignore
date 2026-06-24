@@ -29,3 +29,5 @@ app/src/main/jniLibs/
 third_party/termux-x11/
 third_party/termux-app/
 app/src/main/assets/bootstrap.bin
+app/src/main/assets/termux-proot.tar.gz
+app/src/main/assets/.bootstrap_prepared_v3

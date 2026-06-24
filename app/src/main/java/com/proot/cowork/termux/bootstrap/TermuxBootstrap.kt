@@ -100,11 +100,14 @@ object TermuxBootstrap {
             return false
         }
 
+        ensureProotIfMissing(context, prefix)
+
         if (!TermuxPathPatch.applyIfNeeded(context, prefix)) {
             return false
         }
 
         ensureLayout(context)
+        TermuxStorageSetup.ensureStorageLinks(context)
 
         if (!TermuxBootstrapRunner.runSecondStageIfNeeded(context)) {
             Log.w(TAG, "bootstrap second stage failed; shell may still work")
@@ -132,6 +135,48 @@ object TermuxBootstrap {
         } catch (e: ErrnoException) {
             Log.e(TAG, "Os.symlink bash failed", e)
             false
+        }
+    }
+
+    /** Upgrades from older bootstrap builds that lack bin/proot. */
+    private fun ensureProotIfMissing(context: Context, prefix: File) {
+        val proot = File(prefix, "bin/proot")
+        if (proot.canExecute()) return
+        try {
+            context.assets.open("termux-proot.tar.gz").use { input ->
+                extractGzipTarInto(input, prefix)
+            }
+            chmodExecutable(proot)
+        } catch (e: Exception) {
+            Log.w(TAG, "termux-proot.tar.gz missing or extract failed: ${e.message}")
+        }
+    }
+
+    private fun extractGzipTarInto(input: InputStream, targetDir: File) {
+        targetDir.mkdirs()
+        TarArchiveInputStream(GZIPInputStream(BufferedInputStream(input))).use { tar ->
+            var entry = tar.nextEntry
+            while (entry != null) {
+                val outFile = File(targetDir, entry.name)
+                if (entry.isDirectory) {
+                    outFile.mkdirs()
+                } else {
+                    outFile.parentFile?.mkdirs()
+                    outFile.outputStream().use { out -> tar.copyTo(out) }
+                    if (entry.mode and 0b001_001_001 != 0) {
+                        chmodExecutable(outFile)
+                    }
+                }
+                entry = tar.nextEntry
+            }
+        }
+    }
+
+    private fun chmodExecutable(file: File) {
+        try {
+            Os.chmod(file.absolutePath, OsConstants.S_IRUSR or OsConstants.S_IWUSR or OsConstants.S_IXUSR)
+        } catch (_: ErrnoException) {
+            file.setExecutable(true, false)
         }
     }
 

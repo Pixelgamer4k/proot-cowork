@@ -17,7 +17,9 @@ import com.proot.cowork.data.vnc.VncPortProbe
 import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
-import com.proot.cowork.service.TermuxStackService
+import android.provider.Settings
+import com.proot.cowork.termux.bootstrap.TermuxBootstrap
+import com.proot.cowork.termux.bootstrap.TermuxStorageSetup
 import com.proot.cowork.ui.ProotCoworkApp
 import com.proot.cowork.ui.theme.ProotCoworkTheme
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +82,7 @@ class MainActivity : ComponentActivity() {
                     com.termux.x11.MainActivity.prefs =
                         com.termux.x11.Prefs(applicationContext)
                 }
+                requestTermuxStorageAccess()
                 val svc = Intent(this@MainActivity, TermuxStackService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(svc)
@@ -99,5 +102,38 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (TERMUX_STACK_DESKTOP && TermuxStorageSetup.hasStorageAccess(this)) {
+            TermuxBootstrap.ensureInstalled(applicationContext)
+        }
+    }
+
+    private fun requestTermuxStorageAccess() {
+        if (TermuxStorageSetup.hasStorageAccess(this)) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                        data = Uri.parse("package:$packageName")
+                    },
+                )
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            }
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            requestPermissions(
+                arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE),
+                REQUEST_TERMUX_STORAGE,
+            )
+        }
+    }
+
+    companion object {
+        private const val REQUEST_TERMUX_STORAGE = 9001
     }
 }

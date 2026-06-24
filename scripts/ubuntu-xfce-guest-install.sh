@@ -16,7 +16,6 @@ echo "==> Installing full XFCE desktop + tools"
 apt-get install -y \
   task-xfce-desktop \
   xfce4-goodies \
-  xfce4-wallpapers \
   dbus dbus-x11 sudo \
   firefox \
   thunar thunar-archive-plugin thunar-media-tags-plugin thunar-volman \
@@ -33,8 +32,10 @@ apt-get install -y \
   xfce4-clipman-plugin xfce4-pulseaudio-plugin xfce4-netload-plugin \
   ristretto parole xarchiver file-roller evince mousepad \
   vlc gimp galculator \
-  x11-xserver-utils x11-utils xdotool \
-  ubuntu-restricted-extras || true
+  x11-xserver-utils x11-utils xdotool
+
+# Optional extras (non-fatal in Docker/QEMU builds).
+apt-get install -y ubuntu-restricted-extras || true
 
 echo "==> Configuring XFCE theme, icons, wallpaper"
 for home in /root; do

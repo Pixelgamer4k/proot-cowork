@@ -15,9 +15,6 @@ class X11SurfaceHost(context: Context) : FrameLayout(context) {
     private val inputSender = InputEventSender(lorieView)
 
     init {
-        if (MainActivity.prefs == null) {
-            MainActivity.prefs = Prefs(context.applicationContext)
-        }
         lorieView.setCallback { _, _, screenWidth, screenHeight ->
             val rate = lorieView.display?.refreshRate?.toInt() ?: 60
             LorieView.sendWindowChange(screenWidth, screenHeight, rate, "builtin")

@@ -1,6 +1,7 @@
 package com.proot.cowork.termux.terminal
 
 import android.content.Context
+import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
@@ -11,24 +12,48 @@ object TermuxTerminalController {
 
     fun attach(terminalView: TerminalView, context: Context): Boolean {
         if (session?.isRunning == true) {
+            ensureRenderer(terminalView)
+            terminalView.setTerminalViewClient(CoworkTerminalViewClient())
             terminalView.attachSession(session)
             return true
         }
-        val bash = TermuxBootstrap.shellExecutable(context) ?: return false
 
-        val home = TermuxBootstrap.prefixDir(context).resolve("home").absolutePath
-        val client = CoworkTerminalSessionClient(terminalView)
-        val newSession = TerminalSession(
-            bash.absolutePath,
-            home,
-            arrayOf("-l"),
-            TermuxBootstrap.shellEnvironment(context),
-            10_000,
-            client,
-        )
-        session = newSession
+        val bash = TermuxBootstrap.shellExecutable(context) ?: return false
+        ensureRenderer(terminalView)
         terminalView.setTerminalViewClient(CoworkTerminalViewClient())
-        terminalView.attachSession(newSession)
-        return true
+
+        val startSession = {
+            if (session?.isRunning == true) return@startSession
+            val home = TermuxBootstrap.prefixDir(context).resolve("home").absolutePath
+            val client = CoworkTerminalSessionClient(terminalView)
+            val newSession = TerminalSession(
+                bash.absolutePath,
+                home,
+                arrayOf("-l"),
+                TermuxBootstrap.shellEnvironment(context),
+                10_000,
+                client,
+            )
+            session = newSession
+            terminalView.attachSession(newSession)
+            if (newSession.isRunning) {
+                TermuxStackSession.setTermuxReady(true)
+            }
+        }
+
+        if (terminalView.width > 0 && terminalView.height > 0) {
+            startSession()
+            return session?.isRunning == true
+        }
+
+        terminalView.post { startSession() }
+        return false
+    }
+
+    private fun ensureRenderer(terminalView: TerminalView) {
+        if (terminalView.mRenderer == null) {
+            // Termux default font size (dp); required before attachSession/updateSize.
+            terminalView.setTextSize(14)
+        }
     }
 }

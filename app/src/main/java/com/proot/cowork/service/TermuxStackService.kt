@@ -75,14 +75,19 @@ class TermuxStackService : Service() {
 
             TermuxStackSession.appendLog("Starting X11 server :0…")
             scope.launch(Dispatchers.IO) {
-                val x11Ok = X11EmbedController.ensureServer(applicationContext, width, height)
-                if (x11Ok) {
-                    TermuxStackSession.setX11Ready(true)
-                    TermuxStackSession.appendLog("X11 server ready (black until a GUI app draws)")
-                    updateNotification("Termux + X11 running")
-                } else {
-                    TermuxStackSession.appendLog("X11 server failed (terminal still works)")
-                    updateNotification("Termux running")
+                try {
+                    val x11Ok = X11EmbedController.ensureServer(applicationContext, width, height)
+                    if (x11Ok) {
+                        TermuxStackSession.setX11Ready(true)
+                        TermuxStackSession.appendLog("X11 server ready (black until a GUI app draws)")
+                        updateNotification("Termux + X11 running")
+                    } else {
+                        TermuxStackSession.appendLog("X11 server failed (terminal still works)")
+                        updateNotification("Termux running")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "x11 boot failed", e)
+                    TermuxStackSession.appendLog("X11 error: ${e.message}")
                 }
             }
         } catch (e: Exception) {

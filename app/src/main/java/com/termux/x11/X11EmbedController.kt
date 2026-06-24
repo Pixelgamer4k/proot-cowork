@@ -28,9 +28,6 @@ object X11EmbedController {
     private var serverThread: Thread? = null
 
     fun ensureServer(context: Context, widthPx: Int, heightPx: Int): Boolean {
-        if (MainActivity.prefs == null) {
-            MainActivity.prefs = Prefs(context.applicationContext)
-        }
         if (serverThread?.isAlive == true) return waitForSocket(context, 5_000)
 
         val prefix = TermuxBootstrap.prefixDir(context)

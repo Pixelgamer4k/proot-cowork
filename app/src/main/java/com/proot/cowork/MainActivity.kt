@@ -76,6 +76,10 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             if (TERMUX_STACK_DESKTOP) {
+                if (com.termux.x11.MainActivity.prefs == null) {
+                    com.termux.x11.MainActivity.prefs =
+                        com.termux.x11.Prefs(applicationContext)
+                }
                 val svc = Intent(this@MainActivity, TermuxStackService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(svc)

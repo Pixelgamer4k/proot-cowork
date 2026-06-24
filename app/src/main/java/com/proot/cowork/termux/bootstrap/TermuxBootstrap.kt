@@ -95,8 +95,8 @@ object TermuxBootstrap {
             }
         }
 
-        if (!linkBash(context)) {
-            Log.e(TAG, "failed to link bash into ${bashExecutable(context).absolutePath}")
+        if (!installBash(context)) {
+            Log.e(TAG, "failed to install bash into ${bashExecutable(context).absolutePath}")
             return false
         }
 
@@ -120,7 +120,8 @@ object TermuxBootstrap {
         return ok
     }
 
-    private fun linkBash(context: Context): Boolean {
+    /** Copy libbash.so into prefix/bin/bash (symlinks break under proot). */
+    private fun installBash(context: Context): Boolean {
         val nativeBash = nativeBash(context)
         if (!nativeBash.isFile) {
             Log.e(TAG, "missing ${nativeBash.absolutePath}")
@@ -130,10 +131,13 @@ object TermuxBootstrap {
         val bash = File(binDir, "bash")
         return try {
             if (bash.exists()) bash.delete()
-            Os.symlink(nativeBash.absolutePath, bash.absolutePath)
+            nativeBash.inputStream().use { input ->
+                bash.outputStream().use { output -> input.copyTo(output) }
+            }
+            chmodExecutable(bash)
             true
-        } catch (e: ErrnoException) {
-            Log.e(TAG, "Os.symlink bash failed", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "install bash failed", e)
             false
         }
     }
@@ -183,6 +187,7 @@ object TermuxBootstrap {
     private fun ensureLayout(context: Context) {
         val prefix = prefixDir(context)
         File(prefix, "tmp/.X11-unix").mkdirs()
+        File(prefix, "var/tmp").mkdirs()
         val home = homeDir(context)
         home.mkdirs()
         linkDynamicMotd(prefix, home)

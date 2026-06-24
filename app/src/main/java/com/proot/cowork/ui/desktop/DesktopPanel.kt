@@ -59,7 +59,9 @@ fun DesktopPanel(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = when (desktopState) {
+                text = if (TERMUX_STACK_DESKTOP) {
+                    "Termux + X11"
+                } else when (desktopState) {
                     DesktopState.NO_ROOTFS -> stringResource(R.string.no_rootfs)
                     DesktopState.IMPORTING -> stringResource(R.string.rootfs_importing)
                     DesktopState.STARTING -> "Starting desktop…"

@@ -24,6 +24,8 @@ object TermuxShellEnvironment {
             "PATH=$prefix/bin",
             "LD_LIBRARY_PATH=$lib",
             "TMPDIR=$tmp",
+            "PROOT_TMP_DIR=${File(prefix, "var/tmp").absolutePath}",
+            "PROOT_LOADER=${File(prefix, "libexec/proot/loader").absolutePath}",
             "PWD=$home",
             "DISPLAY=:0",
             "TERM=xterm-256color",

@@ -13,7 +13,18 @@ if [[ -f "$JNILIBS/lib_proot.so" && -f "$JNILIBS/lib_busybox.so" && -f "$JNILIBS
   echo "==> UserLAnd runtime already present in jniLibs"
 else
   mkdir -p "$JNILIBS"
+  # Keep Termux libbash.so if bootstrap was prepared before this step.
+  bash_backup=""
+  if [[ -f "$JNILIBS/libbash.so" ]]; then
+    bash_backup="$(mktemp)"
+    cp "$JNILIBS/libbash.so" "$bash_backup"
+  fi
   rm -f "$JNILIBS"/*
+  if [[ -n "$bash_backup" ]]; then
+    cp "$bash_backup" "$JNILIBS/libbash.so"
+    chmod +x "$JNILIBS/libbash.so"
+    rm -f "$bash_backup"
+  fi
   tmpdir="$(mktemp -d)"
   trap 'rm -rf "$tmpdir"' EXIT
   echo "==> Downloading UserLAnd $ULA_TAG APK"

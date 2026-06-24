@@ -107,6 +107,7 @@ object TermuxBootstrap {
         }
 
         ensureLayout(context)
+        ensureCacheLayout(context)
         TermuxStorageSetup.ensureStorageLinks(context)
 
         if (!TermuxBootstrapRunner.runSecondStageIfNeeded(context)) {
@@ -193,17 +194,23 @@ object TermuxBootstrap {
         linkDynamicMotd(prefix, home)
     }
 
-    /** Use the same dynamic motd script as the Termux app (not the plain etc/motd file). */
+    private fun ensureCacheLayout(context: Context) {
+        File(context.cacheDir, "apt/archives").mkdirs()
+    }
+
+    /** Copy dynamic motd into ~/.termux (symlink execution fails on Android). */
     private fun linkDynamicMotd(prefix: File, home: File) {
         val motdSh = File(prefix, "etc/motd.sh")
         if (!motdSh.isFile) return
+        chmodExecutable(motdSh)
         val termuxDir = File(home, ".termux").also { it.mkdirs() }
-        val link = File(termuxDir, "motd.sh")
-        if (link.exists()) return
+        val dest = File(termuxDir, "motd.sh")
         try {
-            Os.symlink(motdSh.absolutePath, link.absolutePath)
-        } catch (e: ErrnoException) {
-            Log.w(TAG, "motd.sh symlink failed", e)
+            if (dest.exists()) dest.delete()
+            motdSh.copyTo(dest, overwrite = true)
+            chmodExecutable(dest)
+        } catch (e: Exception) {
+            Log.w(TAG, "motd.sh copy failed", e)
         }
     }
 

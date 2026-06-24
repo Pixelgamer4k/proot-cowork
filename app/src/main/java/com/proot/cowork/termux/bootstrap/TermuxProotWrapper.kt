@@ -16,21 +16,23 @@ object TermuxProotWrapper {
     private val WRAPPED_BINARIES = listOf("apt", "dpkg")
 
     fun installIfNeeded(prefix: File) {
-        val marker = File(prefix, ".termux_proot_wrapped_v1")
+        val marker = File(prefix, ".termux_proot_wrapped_v2")
         if (marker.isFile) return
+        File(prefix, ".termux_proot_wrapped_v1").delete()
 
         writeHelperScript(prefix)
-        WRAPPED_BINARIES.forEach { name -> wrapBinary(prefix, name) }
+        WRAPPED_BINARIES.forEach { name -> ensureWrapper(prefix, name) }
         marker.createNewFile()
         Log.i(TAG, "installed $HELPER wrappers for apt/dpkg")
     }
 
     private fun writeHelperScript(prefix: File) {
         val prefixPath = prefix.absolutePath
+        val sh = "$prefixPath/bin/sh"
         val script = File(prefix, "bin/$HELPER")
         script.writeText(
             """
-            |#!/bin/sh
+            |#!$sh
             |# COWORK_PROOT_RUN — package manager helper (not used for interactive shell)
             |. "$prefixPath/etc/profile"
             |export PROOT_NO_SECCOMP=1
@@ -50,20 +52,29 @@ object TermuxProotWrapper {
         chmodExecutable(script)
     }
 
-    private fun wrapBinary(prefix: File, name: String) {
+    private fun ensureWrapper(prefix: File, name: String) {
         val bin = File(prefix, "bin/$name")
         val real = File(prefix, "bin/$name.real")
-        if (!bin.isFile || real.isFile) return
-        if (!isElf(bin)) return
-        if (!bin.renameTo(real)) {
-            Log.w(TAG, "failed to rename $name to $name.real")
-            return
+        if (!real.isFile) {
+            if (bin.isFile && isElf(bin)) {
+                if (!bin.renameTo(real)) {
+                    Log.w(TAG, "failed to rename $name to $name.real")
+                    return
+                }
+            } else {
+                return
+            }
         }
+        writeWrapperScript(prefix, name)
+    }
+
+    private fun writeWrapperScript(prefix: File, name: String) {
         val prefixPath = prefix.absolutePath
+        val sh = "$prefixPath/bin/sh"
         val wrapper = File(prefix, "bin/$name")
         wrapper.writeText(
             """
-            |#!/bin/sh
+            |#!$sh
             |. "$prefixPath/etc/profile"
             |exec "$prefixPath/bin/$HELPER" "$prefixPath/bin/$name.real" "${'$'}@"
             """.trimMargin(),

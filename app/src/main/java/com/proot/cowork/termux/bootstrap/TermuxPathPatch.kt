@@ -14,19 +14,30 @@ object TermuxPathPatch {
     private const val TAG = "TermuxPathPatch"
     private const val LEGACY_ROOT = "/data/data/com.termux/files"
     private const val LEGACY_ROOT_USER = "/data/user/0/com.termux/files"
+    private const val LEGACY_CACHE = "/data/data/com.termux/cache"
+    private const val LEGACY_CACHE_USER = "/data/user/0/com.termux/cache"
 
     fun applyIfNeeded(context: Context, prefix: File): Boolean {
-        val marker = File(prefix, ".termux_paths_patched_v4")
+        val marker = File(prefix, ".termux_paths_patched_v5")
         if (marker.isFile) return true
 
         val filesRoot = context.filesDir.absolutePath
+        val cacheRoot = context.cacheDir.absolutePath
+        val replacements = buildReplacements(filesRoot, cacheRoot)
+
         val hadTree = File(prefix, ".termux_paths_patched_v1").isFile ||
             File(prefix, ".termux_paths_patched_v2").isFile ||
-            File(prefix, ".termux_paths_patched_v3").isFile
+            File(prefix, ".termux_paths_patched_v3").isFile ||
+            File(prefix, ".termux_paths_patched_v4").isFile
         if (!hadTree) {
             Log.i(TAG, "Patching Termux bootstrap paths -> $filesRoot")
-            patchTree(prefix, filesRoot)
+            patchTree(prefix, replacements)
+        } else {
+            Log.i(TAG, "Re-patching critical Termux scripts -> $filesRoot")
+            patchCriticalScripts(prefix, replacements)
         }
+
+        patchLoginMotd(prefix)
         patchLoginExec(prefix)
         TermuxStorageSetup.patchSetupStorageScript(prefix)
         TermuxElfPathPatch.applyIfNeeded(prefix, filesRoot)
@@ -35,24 +46,52 @@ object TermuxPathPatch {
         return true
     }
 
-    private fun patchTree(root: File, filesRoot: String) {
+    private fun buildReplacements(filesRoot: String, cacheRoot: String) =
+        listOf(
+            LEGACY_ROOT to filesRoot,
+            LEGACY_ROOT_USER to filesRoot,
+            LEGACY_CACHE to cacheRoot,
+            LEGACY_CACHE_USER to cacheRoot,
+        )
+
+    private fun patchTree(root: File, replacements: List<Pair<String, String>>) {
         if (!root.isDirectory) return
         root.walkTopDown().forEach { file ->
             if (!file.isFile) return@forEach
             if (file.name.endsWith(".so") || file.name.endsWith(".a")) return@forEach
-            try {
-                val bytes = file.readBytes()
-                if (bytes.indexOf(0) != -1 && !looksLikeText(bytes)) return@forEach
-                var text = bytes.toString(StandardCharsets.UTF_8)
-                val original = text
-                text = text.replace(LEGACY_ROOT, filesRoot)
-                text = text.replace(LEGACY_ROOT_USER, filesRoot)
-                if (text != original) {
-                    file.writeText(text, StandardCharsets.UTF_8)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "skip ${file.absolutePath}: ${e.message}")
+            patchTextFileIfNeeded(file, replacements)
+        }
+    }
+
+    private fun patchCriticalScripts(prefix: File, replacements: List<Pair<String, String>>) {
+        listOf(
+            "bin/login",
+            "bin/pkg",
+            "bin/termux-setup-package-manager",
+            "bin/termux-setup-storage",
+            "etc/profile",
+            "etc/motd.sh",
+        ).forEach { rel ->
+            val file = File(prefix, rel)
+            if (file.isFile) patchTextFileIfNeeded(file, replacements)
+        }
+        File(prefix, "etc/profile.d").listFiles()?.forEach { file ->
+            if (file.isFile) patchTextFileIfNeeded(file, replacements)
+        }
+    }
+
+    private fun patchTextFileIfNeeded(file: File, replacements: List<Pair<String, String>>) {
+        try {
+            val bytes = file.readBytes()
+            if (bytes.indexOf(0) != -1 && !looksLikeText(bytes)) return
+            var text = bytes.toString(StandardCharsets.UTF_8)
+            val original = text
+            replacements.forEach { (from, to) -> text = text.replace(from, to) }
+            if (text != original) {
+                file.writeText(text, StandardCharsets.UTF_8)
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "skip ${file.absolutePath}: ${e.message}")
         }
     }
 
@@ -60,6 +99,29 @@ object TermuxPathPatch {
         val sample = bytes.take(minOf(bytes.size, 512))
         return sample.all { b ->
             b == '\n'.code.toByte() || b == '\r'.code.toByte() || b == '\t'.code.toByte() || b in 32..126
+        }
+    }
+
+    /** Source motd instead of executing through a symlink (Android blocks the latter). */
+    private fun patchLoginMotd(prefix: File) {
+        val login = File(prefix, "bin/login")
+        if (!login.isFile) return
+        var content = login.readText()
+        if (content.contains("COWORK_MOTD_SOURCE")) return
+
+        val newBlock = """
+if [ -f "${'$'}HOME/.termux/motd.sh" ] && [ -r "${'$'}HOME/.termux/motd.sh" ]; then
+	# COWORK_MOTD_SOURCE
+	. "${'$'}HOME/.termux/motd.sh" 2>/dev/null || true""".trimIndent()
+
+        val replaced = content.replace(
+            Regex(
+                """if \[ -f ~/.termux/motd\.sh \]; then\s*\n\s*\[ ! -x ~/.termux/motd\.sh \] && chmod u\+x ~/.termux/motd\.sh\s*\n\s*~/.termux/motd\.sh""",
+            ),
+            newBlock,
+        )
+        if (replaced != content) {
+            login.writeText(replaced)
         }
     }
 
@@ -124,14 +186,14 @@ else
 fi
 """.trimIndent()
 
-  private fun loginExecBlockProot(prefixPath: String) = """
+    private fun loginExecBlockProot(prefixPath: String) = """
 if [ -n "${'$'}TERM" ]; then
 	. "$prefixPath/etc/profile"
 	export PROOT_NO_SECCOMP=1
 	_real="${'$'}{TERMUX__ROOTFS_DIR:-$(dirname "$prefixPath")}"
 	# COWORK_PROOT_BIND: map hardcoded com.termux paths for apt/pkg ELFs
 	if [ -x "$prefixPath/bin/proot" ]; then
-		_proot_bind="-b ${'$'}_real:/data/data/com.termux/files"
+		_proot_bind="-b ${'$'}_real:/data/data/com.termux/files -b ${'$'}_real:${'$'}_real"
 		for _mnt in /storage /storage/emulated /storage/emulated/0; do
 			[ -d "${'$'}_mnt" ] && _proot_bind="${'$'}_proot_bind -b ${'$'}_mnt:${'$'}_mnt"
 		done

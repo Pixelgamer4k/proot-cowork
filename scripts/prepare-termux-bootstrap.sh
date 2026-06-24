@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Termux bootstrap: libbash.so in jniLibs + bootstrap.bin asset (gzip tar of prefix + xkb + proot).
+# Termux bootstrap: libbash.so in jniLibs + bootstrap.bin asset (gzip tar of prefix + xkb + proot + X11).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 JNILIBS="$ROOT/app/src/main/jniLibs/arm64-v8a"
 ASSET="$ROOT/app/src/main/assets/bootstrap.bin"
-MARKER="$ROOT/app/src/main/assets/.bootstrap_prepared_v3"
+MARKER="$ROOT/app/src/main/assets/.bootstrap_prepared_v4"
 ARCH="aarch64"
 BOOTSTRAP_URL="${TERMUX_BOOTSTRAP_URL:-https://github.com/termux/termux-packages/releases/latest/download/bootstrap-${ARCH}.zip}"
 XKB_DEB_URL="${TERMUX_XKB_DEB_URL:-https://packages-cf.termux.dev/apt/termux-x11/pool/main/x/xkeyboard-config/xkeyboard-config_2.48_all.deb}"
@@ -62,6 +62,9 @@ cp -a "$tmpdir/xkb-extract/data/data/com.termux/files/usr/share/xkeyboard-config
 mkdir -p "$tmpdir/prefix/share/X11"
 ln -sfn ../xkeyboard-config-2 "$tmpdir/prefix/share/X11/xkb"
 
+echo "==> Bundling pkg essentials + X11 test clients into bootstrap"
+bash "$ROOT/scripts/bundle-bootstrap-packages.sh" "$tmpdir/prefix"
+
 mkdir -p "$JNILIBS"
 bash_src="$tmpdir/prefix/bin/bash"
 [[ -L "$bash_src" ]] && bash_src="$(readlink -f "$bash_src")"
@@ -72,5 +75,5 @@ rm -f "$tmpdir/prefix/bin/bash"
 mkdir -p "$(dirname "$ASSET")"
 tar -czf "$ASSET" -C "$tmpdir/prefix" .
 touch "$MARKER"
-echo "==> Wrote $ASSET (with XKB + proot), $PROOT_ASSET, and $JNILIBS/libbash.so"
+echo "==> Wrote $ASSET (with XKB + proot + X11 clients), $PROOT_ASSET, and $JNILIBS/libbash.so"
 ls -lh "$ASSET" "$PROOT_ASSET" "$JNILIBS/libbash.so"

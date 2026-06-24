@@ -13,13 +13,16 @@ object TermuxAptConfig {
     private const val TAG = "TermuxAptConfig"
 
     fun applyIfNeeded(context: Context, prefix: File) {
-        val marker = File(prefix, ".termux_apt_config_v2")
+        val marker = File(prefix, ".termux_apt_config_v3")
         if (marker.isFile) return
 
+        File(prefix, ".termux_apt_config_v2").delete()
+        File(prefix, ".termux_apt_config_v1").delete()
         // Remove broken v1 config that overrode Dir::Etc.
         File(prefix, "etc/apt/apt.conf.d/99-cowork-paths").delete()
 
         val cacheRoot = context.cacheDir.absolutePath
+        val prefixPath = prefix.absolutePath
         val confDir = File(prefix, "etc/apt/apt.conf.d").also { it.mkdirs() }
 
         File(confDir, "99-cowork-cache").writeText(
@@ -29,12 +32,21 @@ object TermuxAptConfig {
             """.trimMargin(),
         )
 
+        File(confDir, "99-cowork-dirs").writeText(
+            """
+            |Dir::Etc::parts "$prefixPath/etc/apt/apt.conf.d";
+            |Dir::Etc::sourcelist "$prefixPath/etc/apt/sources.list";
+            |Dir::Etc::sourceparts "$prefixPath/etc/apt/sources.list.d";
+            |Dir::State::tmpdir "$prefixPath/tmp";
+            """.trimMargin(),
+        )
+
         ensureSourcesList(prefix)
         File(confDir, "DirectoryExists").createNewFile()
         File(prefix, "var/log/apt").mkdirs()
         File(cacheRoot, "apt/archives").mkdirs()
         marker.createNewFile()
-        Log.i(TAG, "wrote apt cache config, cache=$cacheRoot/apt")
+        Log.i(TAG, "wrote apt config (dirs + cache), cache=$cacheRoot/apt")
     }
 
     private fun ensureSourcesList(prefix: File) {

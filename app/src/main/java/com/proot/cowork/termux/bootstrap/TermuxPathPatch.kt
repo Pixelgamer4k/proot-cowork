@@ -28,8 +28,9 @@ object TermuxPathPatch {
 
         TermuxBinaryRestore.unwrapPackageManagers(prefix)
 
-        // Always refresh apt config (v2 removes broken Dir::Etc overrides).
+        // Always refresh apt config (v3 fixes Dir::Etc::parts).
         File(prefix, ".termux_apt_config_v1").delete()
+        File(prefix, ".termux_apt_config_v2").delete()
         TermuxAptConfig.applyIfNeeded(context, prefix)
 
         val hadTree = File(prefix, ".termux_paths_patched_v1").isFile ||

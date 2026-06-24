@@ -28,6 +28,9 @@ jobs:
       - name: Setup Termux stack (x11 + terminal modules)
         run: bash scripts/setup-termux-stack.sh
 
+      - name: Verify termux-x11 embed patches
+        run: grep -q COWORK_TRIGGER_CALLBACK_NULL third_party/termux-x11/app/src/main/java/com/termux/x11/LorieView.java
+
       - name: Fetch UserLAnd runtime
         run: bash scripts/fetch-userland-runtime.sh
 

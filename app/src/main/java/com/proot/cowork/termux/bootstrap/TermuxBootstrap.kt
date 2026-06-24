@@ -13,7 +13,7 @@ import java.util.zip.GZIPInputStream
 
 object AssetExtractor {
 
-  private const val TAG = "TermuxBootstrap"
+    private const val TAG = "TermuxBootstrap"
 
     fun extractGzipTar(input: InputStream, targetDir: File): Boolean {
         val marker = File(targetDir, ".extraction_complete")
@@ -62,14 +62,20 @@ object TermuxBootstrap {
 
     private const val TAG = "TermuxBootstrap"
 
+    fun filesDir(context: Context): File = context.filesDir
+
     fun prefixDir(context: Context): File = File(context.filesDir, "usr")
 
+    /** Real Termux home is `files/home`, not `files/usr/home`. */
+    fun homeDir(context: Context): File = File(context.filesDir, "home")
+
     fun bashExecutable(context: Context): File = File(prefixDir(context), "bin/bash")
+
+    fun loginExecutable(context: Context): File = File(prefixDir(context), "bin/login")
 
     fun nativeBash(context: Context): File =
         File(context.applicationInfo.nativeLibraryDir, "libbash.so")
 
-    /** Path to pass to TerminalSession — prefers prefix bin/bash, falls back to libbash.so. */
     fun shellExecutable(context: Context): File? {
         val bash = bashExecutable(context)
         if (bash.canExecute()) return bash
@@ -93,7 +99,16 @@ object TermuxBootstrap {
             Log.e(TAG, "failed to link bash into ${bashExecutable(context).absolutePath}")
             return false
         }
-        ensureLayout(prefix)
+
+        if (!TermuxPathPatch.applyIfNeeded(context, prefix)) {
+            return false
+        }
+
+        ensureLayout(context)
+
+        if (!TermuxBootstrapRunner.runSecondStageIfNeeded(context)) {
+            Log.w(TAG, "bootstrap second stage failed; shell may still work")
+        }
 
         val ok = shellExecutable(context) != null
         if (!ok) {
@@ -120,25 +135,28 @@ object TermuxBootstrap {
         }
     }
 
-    private fun ensureLayout(prefix: File) {
+    private fun ensureLayout(context: Context) {
+        val prefix = prefixDir(context)
         File(prefix, "tmp/.X11-unix").mkdirs()
-        File(prefix, "home").mkdirs()
+        val home = homeDir(context)
+        home.mkdirs()
+        linkDynamicMotd(prefix, home)
     }
 
-    fun shellEnvironment(context: Context): Array<String> {
-        val prefix = prefixDir(context).absolutePath
-        val home = File(prefix, "home").absolutePath
-        val tmp = File(prefix, "tmp").absolutePath
-        val lib = File(prefix, "lib").absolutePath
-        return arrayOf(
-            "HOME=$home",
-            "PREFIX=$prefix",
-            "PATH=$prefix/bin",
-            "LD_LIBRARY_PATH=$lib",
-            "TMPDIR=$tmp",
-            "DISPLAY=:0",
-            "TERM=xterm-256color",
-            "LANG=en_US.UTF-8",
-        )
+    /** Use the same dynamic motd script as the Termux app (not the plain etc/motd file). */
+    private fun linkDynamicMotd(prefix: File, home: File) {
+        val motdSh = File(prefix, "etc/motd.sh")
+        if (!motdSh.isFile) return
+        val termuxDir = File(home, ".termux").also { it.mkdirs() }
+        val link = File(termuxDir, "motd.sh")
+        if (link.exists()) return
+        try {
+            Os.symlink(motdSh.absolutePath, link.absolutePath)
+        } catch (e: ErrnoException) {
+            Log.w(TAG, "motd.sh symlink failed", e)
+        }
     }
+
+    fun shellEnvironment(context: Context): Array<String> =
+        TermuxShellEnvironment.build(context)
 }

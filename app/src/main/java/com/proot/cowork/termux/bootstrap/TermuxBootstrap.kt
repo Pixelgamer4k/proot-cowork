@@ -106,6 +106,9 @@ object TermuxBootstrap {
             return false
         }
 
+        // installBash runs before path patch; re-patch copied libbash (RUNPATH + strings).
+        patchBashElf(context)
+
         ensureLayout(context)
         ensureCacheLayout(context)
         TermuxStorageSetup.ensureStorageLinks(context)
@@ -125,7 +128,7 @@ object TermuxBootstrap {
         return ok
     }
 
-    /** Copy libbash.so into prefix/bin/bash (symlinks break under proot). */
+    /** Copy libbash.so into prefix/bin/bash and patch embedded com.termux paths. */
     private fun installBash(context: Context): Boolean {
         val nativeBash = nativeBash(context)
         if (!nativeBash.isFile) {
@@ -145,6 +148,14 @@ object TermuxBootstrap {
             Log.e(TAG, "install bash failed", e)
             false
         }
+    }
+
+    private fun patchBashElf(context: Context) {
+        val bash = bashExecutable(context)
+        if (!bash.isFile) return
+        val elfRoot = "/data/data/${context.packageName}/files"
+        val filesRoot = context.filesDir.absolutePath
+        TermuxElfPathPatch.patchBinary(bash, elfRoot, filesRoot)
     }
 
     /** Upgrades from older bootstrap builds that lack bin/proot. */

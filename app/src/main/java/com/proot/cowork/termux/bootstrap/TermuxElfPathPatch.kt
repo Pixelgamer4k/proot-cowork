@@ -14,6 +14,21 @@ object TermuxElfPathPatch {
     private const val LEGACY_ROOT = "/data/data/com.termux/files"
     private const val LEGACY_ROOT_USER = "/data/user/0/com.termux/files"
 
+    fun patchBinary(file: File, elfRoot: String, filesRoot: String): Int {
+        if (!file.isFile || !isElf(file)) return 0
+        var patched = 0
+        listOf(
+            LEGACY_ROOT to elfRoot,
+            LEGACY_ROOT_USER to filesRoot,
+        ).forEach { (from, to) ->
+            patched += patchFile(file, from, to)
+        }
+        if (patched > 0) {
+            Log.i(TAG, "patched $patched strings in ${file.name}")
+        }
+        return patched
+    }
+
     fun applyIfNeeded(prefix: File, elfRoot: String, filesRoot: String): Boolean {
         val marker = File(prefix, ".termux_elf_patched_v2")
         if (marker.isFile) return true

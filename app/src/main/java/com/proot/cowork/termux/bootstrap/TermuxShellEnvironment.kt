@@ -30,6 +30,7 @@ object TermuxShellEnvironment {
             "TERMUX_APP__DATA_DIR" to dataDir,
             "TERMUX_APP__FILES_DIR" to filesDir,
             "PATH" to prefix + "/bin",
+            "LD_LIBRARY_PATH" to File(prefix, "lib").absolutePath,
             "TMPDIR" to tmp,
             "PWD" to home,
             "DISPLAY" to ":0",
@@ -43,10 +44,6 @@ object TermuxShellEnvironment {
             "TERMUX_APP__PACKAGE_NAME" to context.packageName,
             "ANDROID__BUILD_VERSION_SDK" to Build.VERSION.SDK_INT.toString(),
         )
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            env["LD_LIBRARY_PATH"] = File(prefix, "lib").absolutePath
-        }
 
         TermuxExecSetup.ldPreloadPath(TermuxBootstrap.prefixDir(context))?.let { preload ->
             env["LD_PRELOAD"] = preload

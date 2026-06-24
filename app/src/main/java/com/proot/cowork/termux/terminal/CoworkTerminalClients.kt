@@ -8,9 +8,13 @@ import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 
-class CoworkTerminalViewClient : TerminalViewClient {
+class CoworkTerminalViewClient(
+    private val terminalView: TerminalView,
+) : TerminalViewClient {
     override fun onScale(scale: Float): Float = 1.0f
-    override fun onSingleTapUp(e: MotionEvent) {}
+    override fun onSingleTapUp(e: MotionEvent) {
+        TerminalKeyboard.focusAndShow(terminalView)
+    }
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
     override fun shouldEnforceCharBasedInput(): Boolean = false
     override fun shouldUseCtrlSpaceWorkaround(): Boolean = false

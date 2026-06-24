@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.proot.cowork.domain.desktop.TermuxStackSession
+import com.proot.cowork.termux.terminal.TerminalKeyboard
 import com.proot.cowork.termux.terminal.TermuxTerminalController
 import com.termux.x11.X11EmbedController
 import com.termux.x11.X11SurfaceHost
@@ -49,12 +50,16 @@ fun EmbeddedTermuxSurface(modifier: Modifier = Modifier) {
         factory = { ctx ->
             TerminalView(ctx, null).apply {
                 setBackgroundColor(Color.parseColor("#000000"))
+                TerminalKeyboard.setup(this)
             }
         },
         update = { view ->
             if (!bootstrapReady) return@AndroidView
             if (TermuxTerminalController.attach(view, context)) {
                 TermuxStackSession.setTermuxReady(true)
+                if (!view.hasFocus()) {
+                    TerminalKeyboard.focusAndShow(view)
+                }
             }
         },
     )

@@ -1,7 +1,9 @@
 package com.termux.x11
 
 import android.content.Context
+import android.content.Context
 import android.view.MotionEvent
+import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import com.termux.x11.input.InputEventSender
 import com.termux.x11.input.InputStub
@@ -32,6 +34,9 @@ class X11SurfaceHost(context: Context) : FrameLayout(context) {
         val y = event.y
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                lorieView.requestFocus()
+                (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                    ?.showSoftInput(lorieView, InputMethodManager.SHOW_IMPLICIT)
                 inputSender.sendMouseEvent(
                     android.graphics.PointF(x, y),
                     InputStub.BUTTON_LEFT,

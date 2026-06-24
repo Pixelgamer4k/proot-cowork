@@ -12,16 +12,17 @@ object TermuxTerminalController {
     private var session: TerminalSession? = null
 
     fun attach(terminalView: TerminalView, context: Context): Boolean {
+        TerminalKeyboard.setup(terminalView)
         if (session?.isRunning == true) {
             ensureRenderer(terminalView)
-            terminalView.setTerminalViewClient(CoworkTerminalViewClient())
+            terminalView.setTerminalViewClient(CoworkTerminalViewClient(terminalView))
             terminalView.attachSession(session)
             return true
         }
 
         val bash = TermuxBootstrap.shellExecutable(context) ?: return false
         ensureRenderer(terminalView)
-        terminalView.setTerminalViewClient(CoworkTerminalViewClient())
+        terminalView.setTerminalViewClient(CoworkTerminalViewClient(terminalView))
 
         if (terminalView.width > 0 && terminalView.height > 0) {
             startSession(terminalView, context, bash)
@@ -49,6 +50,7 @@ object TermuxTerminalController {
         terminalView.attachSession(newSession)
         if (newSession.isRunning) {
             TermuxStackSession.setTermuxReady(true)
+            TerminalKeyboard.focusAndShow(terminalView)
         }
     }
 

@@ -121,7 +121,7 @@ object X11EmbedController {
 
     fun connectLorieView(lorieView: LorieView): Boolean {
         if (LorieView.connected()) {
-            lorieView.triggerCallback()
+            LorieViewEmbed.safeTrigger(lorieView)
             return true
         }
         val service = serviceRef.get()
@@ -132,7 +132,7 @@ object X11EmbedController {
         return try {
             val fd: ParcelFileDescriptor = service.getXConnection() ?: return false
             LorieView.connect(fd.detachFd())
-            lorieView.triggerCallback()
+            LorieViewEmbed.safeTrigger(lorieView)
             LorieView.connected()
         } catch (e: Exception) {
             Log.e(TAG, "connect failed", e)

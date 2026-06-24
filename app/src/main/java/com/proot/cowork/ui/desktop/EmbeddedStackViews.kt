@@ -4,8 +4,10 @@ import android.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -24,6 +26,7 @@ fun EmbeddedX11Surface(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val bootstrapReady by TermuxStackSession.bootstrapReady.collectAsState()
+    var serverStarted by remember { mutableStateOf(false) }
     val (widthPx, heightPx) = remember(context) {
         val w = context.resources.displayMetrics.widthPixels.coerceAtLeast(640)
         w to (w * 9 / 16).coerceAtLeast(360)
@@ -38,11 +41,14 @@ fun EmbeddedX11Surface(modifier: Modifier = Modifier) {
         },
         update = { host ->
             if (!bootstrapReady) return@AndroidView
-            val w = host.width.takeIf { it > 0 } ?: widthPx
-            val h = host.height.takeIf { it > 0 } ?: heightPx
-            scope.launch(Dispatchers.IO) {
-                if (X11EmbedController.ensureServer(context, w, h)) {
-                    TermuxX11Demo.paintBackground(context)
+            if (!serverStarted) {
+                serverStarted = true
+                val w = host.width.takeIf { it > 0 } ?: widthPx
+                val h = host.height.takeIf { it > 0 } ?: heightPx
+                scope.launch(Dispatchers.IO) {
+                    if (X11EmbedController.ensureServer(context, w, h)) {
+                        TermuxX11Demo.paintBackground(context)
+                    }
                 }
             }
             X11EmbedController.pollConnect(host.lorieView) {

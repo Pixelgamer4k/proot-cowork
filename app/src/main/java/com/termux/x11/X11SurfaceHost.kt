@@ -1,7 +1,6 @@
 package com.termux.x11
 
 import android.content.Context
-import android.content.Context
 import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout

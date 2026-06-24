@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 JNILIBS="$ROOT/app/src/main/jniLibs/arm64-v8a"
 ASSET="$ROOT/app/src/main/assets/bootstrap.bin"
-MARKER="$ROOT/app/src/main/assets/.bootstrap_prepared_v5"
+MARKER="$ROOT/app/src/main/assets/.bootstrap_prepared_v6"
 ARCH="aarch64"
 BOOTSTRAP_URL="${TERMUX_BOOTSTRAP_URL:-https://github.com/termux/termux-packages/releases/latest/download/bootstrap-${ARCH}.zip}"
 XKB_DEB_URL="${TERMUX_XKB_DEB_URL:-https://packages-cf.termux.dev/apt/termux-x11/pool/main/x/xkeyboard-config/xkeyboard-config_2.48_all.deb}"

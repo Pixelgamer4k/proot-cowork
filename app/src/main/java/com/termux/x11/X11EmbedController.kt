@@ -11,6 +11,7 @@ import android.os.ParcelFileDescriptor
 import android.system.Os
 import android.util.Log
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
+import com.proot.cowork.termux.x11.X11DisplayConfig
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -61,6 +62,7 @@ object X11EmbedController {
                 Os.setenv("XLORIE_WIDTH", widthPx.toString(), true)
                 Os.setenv("XLORIE_HEIGHT", heightPx.toString(), true)
             }
+            Os.setenv("XLORIE_FRAMERATE", X11DisplayConfig.FPS.toString(), true)
         } catch (e: Exception) {
             Log.e(TAG, "env setup failed", e)
             return false

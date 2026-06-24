@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.termux.bootstrap.TermuxX11Demo
+import com.proot.cowork.termux.x11.X11DisplayConfig
 import com.proot.cowork.termux.terminal.TerminalKeyboard
 import com.proot.cowork.termux.terminal.TermuxTerminalController
 import com.termux.x11.X11EmbedController
@@ -27,10 +28,6 @@ fun EmbeddedX11Surface(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val bootstrapReady by TermuxStackSession.bootstrapReady.collectAsState()
     var serverStarted by remember { mutableStateOf(false) }
-    val (widthPx, heightPx) = remember(context) {
-        val w = context.resources.displayMetrics.widthPixels.coerceAtLeast(640)
-        w to (w * 9 / 16).coerceAtLeast(360)
-    }
 
     AndroidView(
         modifier = modifier,
@@ -43,10 +40,13 @@ fun EmbeddedX11Surface(modifier: Modifier = Modifier) {
             if (!bootstrapReady) return@AndroidView
             if (!serverStarted) {
                 serverStarted = true
-                val w = host.width.takeIf { it > 0 } ?: widthPx
-                val h = host.height.takeIf { it > 0 } ?: heightPx
                 scope.launch(Dispatchers.IO) {
-                    if (X11EmbedController.ensureServer(context, w, h)) {
+                    if (X11EmbedController.ensureServer(
+                            context,
+                            X11DisplayConfig.WIDTH,
+                            X11DisplayConfig.HEIGHT,
+                        )
+                    ) {
                         TermuxX11Demo.paintBackground(context)
                     }
                 }

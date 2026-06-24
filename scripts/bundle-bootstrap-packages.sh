@@ -108,7 +108,7 @@ trap 'rm -rf "$DL_DIR" "$EXTRACT_DIR"' EXIT
 queue_add \
   termux-keyring resolv-conf openssl libc++ libandroid-glob \
   x11-repo xorg-xsetroot aterm \
-  proot-distro wget curl unzip gnupg ca-certificates pulseaudio
+  proot-distro wget curl unzip gnupg ca-certificates pulseaudio dbus xorg-xrandr
 
 while ((${#QUEUE[@]} > 0)); do
   pkg="${QUEUE[0]}"

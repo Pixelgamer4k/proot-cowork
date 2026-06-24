@@ -3,6 +3,9 @@ package com.termux.x11
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.util.Log
+import com.proot.cowork.termux.x11.X11DisplayConfig
+import com.proot.cowork.termux.bootstrap.TermuxBootstrap
+import com.proot.cowork.termux.bootstrap.TermuxX11Demo
 
 /**
  * Safe LorieView setup when [MainActivity] is not running (in-process embed).
@@ -13,8 +16,13 @@ object LorieViewEmbed {
 
     fun attachCallback(lorieView: LorieView) {
         val callback = LorieView.Callback { _, _, screenWidth, screenHeight ->
-            val rate = lorieView.display?.refreshRate?.toInt() ?: 60
-            LorieView.sendWindowChange(screenWidth, screenHeight, rate, "builtin")
+            val rate = X11DisplayConfig.FPS
+            LorieView.sendWindowChange(
+                screenWidth.coerceAtLeast(X11DisplayConfig.WIDTH),
+                screenHeight.coerceAtLeast(X11DisplayConfig.HEIGHT),
+                rate,
+                "builtin",
+            )
         }
         if (!assignCallback(lorieView, callback)) {
             try {
@@ -59,10 +67,13 @@ object LorieViewEmbed {
             override fun hasFocusStateSpecified(): Boolean = true
         }
         lorieView.post {
-            val rate = lorieView.display?.refreshRate?.toInt() ?: 60
-            val w = lorieView.width.coerceAtLeast(1)
-            val h = lorieView.height.coerceAtLeast(1)
-            LorieView.sendWindowChange(w, h, rate, "builtin")
+            val rate = X11DisplayConfig.FPS
+            LorieView.sendWindowChange(
+                X11DisplayConfig.WIDTH,
+                X11DisplayConfig.HEIGHT,
+                rate,
+                "builtin",
+            )
         }
     }
 }

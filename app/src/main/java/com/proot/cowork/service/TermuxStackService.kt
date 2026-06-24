@@ -14,6 +14,7 @@ import com.proot.cowork.R
 import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
 import com.proot.cowork.termux.bootstrap.TermuxX11Demo
+import com.proot.cowork.termux.x11.X11DisplayConfig
 import com.termux.x11.X11EmbedController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,11 +71,10 @@ class TermuxStackService : Service() {
             TermuxStackSession.appendLog("Bootstrap ready")
             TermuxStackSession.setBootstrapReady(true)
 
-            val metrics = resources.displayMetrics
-            val width = metrics.widthPixels.coerceAtLeast(640)
-            val height = (width * 9 / 16).coerceAtLeast(360)
+            val width = X11DisplayConfig.WIDTH
+            val height = X11DisplayConfig.HEIGHT
 
-            TermuxStackSession.appendLog("Starting X11 server :0…")
+            TermuxStackSession.appendLog("Starting X11 server ${X11DisplayConfig.DISPLAY} (${width}x${height}@${X11DisplayConfig.FPS})…")
             scope.launch(Dispatchers.IO) {
                 try {
                     val x11Ok = X11EmbedController.ensureServer(applicationContext, width, height)

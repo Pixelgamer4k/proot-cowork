@@ -2,6 +2,7 @@ package com.proot.cowork.ui.tabs
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,14 +17,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,15 +36,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
 import com.proot.cowork.ui.components.CoworkCard
+import com.proot.cowork.ui.design.CoworkTokens
 import com.proot.cowork.ui.theme.Motion
 
-private data class AgentCardModel(
-    val name: String,
-    val role: String,
-    val tasks: Int,
-    val online: Boolean,
-    val icon: ImageVector,
-)
+private data class AgentCardModel(val name: String, val role: String, val tasks: Int, val online: Boolean, val icon: ImageVector)
 
 private val DEMO_AGENTS = listOf(
     AgentCardModel("Planner", "Task Planning", 24, true, Icons.Default.Psychology),
@@ -55,90 +49,50 @@ private val DEMO_AGENTS = listOf(
 )
 
 @Composable
-fun AgentsTabContent(
-    isExecuting: Boolean,
-    modifier: Modifier = Modifier,
-) {
+fun AgentsTabContent(isExecuting: Boolean, modifier: Modifier = Modifier) {
     val onlineCount = DEMO_AGENTS.count { it.online } + if (isExecuting) 1 else 0
-
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            CoworkCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.active_agents),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    ) {
+            CoworkCard {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.active_agents), fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
+                    Surface(shape = CoworkTokens.ShapePill, color = CoworkTokens.Mint.copy(alpha = 0.14f)) {
                         Text(
-                            text = stringResource(R.string.agents_online_count, onlineCount.coerceAtMost(6)),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            stringResource(R.string.agents_online_count, onlineCount.coerceAtMost(6)),
+                            Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            color = CoworkTokens.Mint,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(14.dp))
-                AgentActivityChart(active = isExecuting)
+                Spacer(Modifier.height(16.dp))
+                AgentActivityChart(isExecuting)
             }
         }
-
-        items(DEMO_AGENTS) { agent ->
-            AgentRow(agent = agent, highlight = isExecuting && agent.name == "Planner")
-        }
-
-        item {
-            Text(
-                text = stringResource(R.string.coming_soon_swarm),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
+        items(DEMO_AGENTS) { AgentRow(it, isExecuting && it.name == "Planner") }
     }
 }
 
 @Composable
 private fun AgentActivityChart(active: Boolean) {
-    val heights = listOf(0.35f, 0.55f, 0.75f, 0.5f, 0.9f, if (active) 1f else 0.4f)
+    val heights = listOf(0.32f, 0.52f, 0.72f, 0.48f, 0.88f, if (active) 1f else 0.38f)
     val labels = listOf("Pln", "Res", "Exe", "Cod", "Val", "Sl")
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom,
-    ) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
         heights.zip(labels).forEach { (target, label) ->
-            val heightFrac by animateFloatAsState(
-                targetValue = target,
-                animationSpec = Motion.springSmooth,
-                label = "bar",
-            )
+            val h by animateFloatAsState(target, Motion.springSmooth, label = "bar")
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
-                    modifier = Modifier
-                        .size(width = 28.dp, height = (72 * heightFrac).dp.coerceAtLeast(8.dp))
-                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f + heightFrac * 0.35f)),
+                    Modifier
+                        .size(width = 26.dp, height = maxOf(8.dp, (68 * h).dp))
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
+                        .background(CoworkTokens.Mint.copy(alpha = 0.28f + h * 0.45f)),
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Spacer(Modifier.height(6.dp))
+                Text(label, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
             }
         }
     }
@@ -147,53 +101,25 @@ private fun AgentActivityChart(active: Boolean) {
 @Composable
 private fun AgentRow(agent: AgentCardModel, highlight: Boolean) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = if (highlight) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-        },
-        modifier = Modifier.fillMaxWidth(),
+        shape = CoworkTokens.ShapeCard,
+        color = if (highlight) CoworkTokens.Mint.copy(alpha = 0.08f) else CoworkTokens.Surface,
+        modifier = Modifier.fillMaxWidth().border(1.dp, CoworkTokens.Border, CoworkTokens.ShapeCard),
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
+                Modifier.size(40.dp).clip(CoworkTokens.ShapeIconTile).background(CoworkTokens.SurfaceElevated).border(1.dp, CoworkTokens.Border, CoworkTokens.ShapeIconTile),
                 contentAlignment = Alignment.Center,
-            ) {
-                Icon(agent.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            }
-            Spacer(modifier = Modifier.size(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            ) { Icon(agent.icon, null, tint = CoworkTokens.Mint) }
+            Spacer(Modifier.size(12.dp))
+            Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(agent.name, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.size(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (agent.online) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.outline,
-                            ),
-                    )
+                    Text(agent.name, fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
+                    Spacer(Modifier.size(6.dp))
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(if (agent.online) CoworkTokens.Mint else CoworkTokens.TextMuted))
                 }
-                Text(
-                    text = agent.role,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Text(agent.role, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
-            Text(
-                text = stringResource(R.string.agent_task_count, agent.tasks),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text(stringResource(R.string.agent_task_count, agent.tasks), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
         }
     }
 }

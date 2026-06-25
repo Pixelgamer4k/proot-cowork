@@ -62,6 +62,8 @@
     <string name="mode_swarm_plan">Swarm · Plan</string>
     <string name="mode_swarm_direct">Swarm · Execute</string>
     <string name="mode_swarm_schedule">Swarm · Schedule</string>
+    <string name="mode_swarm_short">Swarm</string>
+    <string name="speak">Speak</string>
     <string name="swarm_plan_title">Swarm plan</string>
     <string name="active_agents">Active Agents</string>
     <string name="agents_online_count">%1$d Online</string>
@@ -80,9 +82,18 @@
     <string name="status_failed">Failed</string>
     <string name="files_empty">No artifacts yet. Take a screenshot or run an agent task.</string>
     <string name="files_actions_hint">Upload and folder actions — Phase 5 file browser.</string>
+    <string name="files_new_folder">New Folder</string>
+    <string name="files_upload">Upload</string>
+    <string name="files_select">Select</string>
     <string name="terminal_empty">Stack logs appear here while Termux and X11 boot.</string>
     <string name="terminal_input_hint">~ $ Enter command…</string>
     <string name="coming_soon_terminal">Interactive shell embed — next build.</string>
     <string name="settings_api_section">API CONFIGURATION</string>
+    <string name="settings_rootfs_section">ROOTFS</string>
+    <string name="settings_proot_section">PROOT ENVIRONMENT</string>
     <string name="settings_providers_hint">OpenRouter, OpenAI, Ollama, or any OpenAI-compatible endpoint.</string>
+    <string name="imported_badge">Imported</string>
+    <string name="rootfs_meta">Size: 3.4 GB · Desktop: XFCE4 · User: coworker (sudo nopasswd)</string>
+    <string name="container_health">Container Health</string>
+    <string name="container_running">Running</string>
 </resources>

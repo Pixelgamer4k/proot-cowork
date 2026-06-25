@@ -9,11 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,6 +26,19 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
+import com.proot.cowork.ui.design.CoworkTokens
+
+private val DEMO_TERMINAL = listOf(
+    "~ \$ ls -la",
+    "drwxr-xr-x  projects",
+    "drwxr-xr-x  documents",
+    "-rw-r--r--  app.py",
+    "-rw-r--r--  requirements.txt",
+    "~ \$ python app.py",
+    " * Running on http://127.0.0.1:5000",
+    "~ \$ curl http://127.0.0.1:5000/api/tasks",
+    "[{\"id\":1,\"title\":\"First task\",\"done\":false}]",
+)
 
 @Composable
 fun TerminalTabContent(
@@ -35,35 +47,26 @@ fun TerminalTabContent(
     modifier: Modifier = Modifier,
 ) {
     var command by rememberSaveable { mutableStateOf("") }
+    val lines = if (logLines.isEmpty()) DEMO_TERMINAL else logLines
 
     Column(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                .background(CoworkTokens.Bg)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
             reverseLayout = true,
         ) {
-            if (logLines.isEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.terminal_empty),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
-            } else {
-                items(logLines.asReversed()) { line ->
-                    Text(
-                        text = line,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = terminalLineColor(line),
-                    )
-                }
+            items(lines.asReversed()) { line ->
+                Text(
+                    text = line,
+                    fontFamily = FontFamily.Monospace,
+                    color = terminalLineColor(line),
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
             }
         }
 
@@ -72,31 +75,33 @@ fun TerminalTabContent(
             onValueChange = { command = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             placeholder = {
                 Text(
                     stringResource(R.string.terminal_input_hint),
                     fontFamily = FontFamily.Monospace,
+                    color = CoworkTokens.TextMuted,
                 )
             },
-            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-            singleLine = true,
-            shape = RoundedCornerShape(14.dp),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(
-                onSend = {
-                    if (command.isNotBlank()) {
-                        onCommandSubmit(command.trim())
-                        command = ""
-                    }
-                },
+            textStyle = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
+                fontFamily = FontFamily.Monospace,
+                color = CoworkTokens.TextPrimary,
             ),
-        )
-        Text(
-            text = stringResource(R.string.coming_soon_terminal),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 4.dp),
+            singleLine = true,
+            shape = CoworkTokens.ShapePill,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = CoworkTokens.Border,
+                unfocusedBorderColor = CoworkTokens.Border,
+                focusedContainerColor = CoworkTokens.Surface,
+                unfocusedContainerColor = CoworkTokens.Surface,
+            ),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = {
+                if (command.isNotBlank()) {
+                    onCommandSubmit(command.trim())
+                    command = ""
+                }
+            }),
         )
     }
 }
@@ -104,9 +109,9 @@ fun TerminalTabContent(
 private fun terminalLineColor(line: String): Color {
     val lower = line.lowercase()
     return when {
-        lower.contains("error") || lower.contains("failed") -> Color(0xFFFF6B6B)
-        lower.contains("ready") || lower.contains("running") -> Color(0xFF4FD1C5)
-        line.trimStart().startsWith("$") || line.contains("~ $") -> Color(0xFF94A3B8)
-        else -> Color(0xFFE2E8F0)
+        lower.contains("error") || lower.contains("failed") -> CoworkTokens.Failed
+        lower.contains("running") || line.trimStart().startsWith("[") -> CoworkTokens.Mint
+        line.contains("~ \$") || line.contains("~$") -> CoworkTokens.TerminalPrompt
+        else -> CoworkTokens.TextSecondary
     }
 }

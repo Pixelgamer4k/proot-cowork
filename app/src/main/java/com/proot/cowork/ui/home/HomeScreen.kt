@@ -12,13 +12,11 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -45,6 +43,7 @@ import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.ui.agent.ChatComposer
 import com.proot.cowork.ui.components.CoworkBottomNav
 import com.proot.cowork.ui.components.CoworkTopBar
+import com.proot.cowork.ui.design.CoworkTokens
 import com.proot.cowork.ui.desktop.DesktopPreviewCard
 import com.proot.cowork.ui.tabs.AgentsTabContent
 import com.proot.cowork.ui.tabs.ChatTabContent
@@ -54,7 +53,6 @@ import com.proot.cowork.ui.tabs.SkillsTabContent
 import com.proot.cowork.ui.tabs.TerminalTabContent
 import com.proot.cowork.ui.theme.Motion
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     settingsRepository: SettingsRepository,
@@ -63,11 +61,7 @@ fun HomeScreen(
     dropDirectoryLabel: String,
     onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = viewModel(
-        factory = HomeViewModel.factory(
-            settingsRepository,
-            rootfsRepository,
-            prootContainerRepository,
-        ),
+        factory = HomeViewModel.factory(settingsRepository, rootfsRepository, prootContainerRepository),
     ),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -75,45 +69,35 @@ fun HomeScreen(
     val desktopLogs by DesktopSession.logLines.collectAsState()
     val density = LocalDensity.current
     var composerHeightPx by remember { mutableStateOf(0) }
-    var composerFocused by remember { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableStateOf(CoworkTab.Chat) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) viewModel.importFromUri(uri)
     }
 
     LaunchedEffect(uiState.importError) {
-        val message = uiState.importError ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(message)
-        viewModel.clearImportError()
+        uiState.importError?.let { snackbarHostState.showSnackbar(it); viewModel.clearImportError() }
     }
 
     val composerBottomPadding = with(density) { composerHeightPx.toDp() }
-    val showChatComposer = selectedTab == CoworkTab.Chat &&
-        uiState.desktopState != DesktopState.IMPORTING
+    val showChatComposer = selectedTab == CoworkTab.Chat && uiState.desktopState != DesktopState.IMPORTING
     val terminalLogs = remember(stackLogs, desktopLogs) { (stackLogs + desktopLogs).takeLast(120) }
-    val artifactsDir = remember { settingsRepository.getArtifactsDir() }
-    val skillsDir = remember { settingsRepository.getSkillsDir() }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(CoworkTokens.Bg)
             .statusBarsPadding(),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
             CoworkTopBar(
                 distroName = uiState.distroName,
                 desktopState = uiState.desktopState,
                 onMenuSettings = onNavigateToSettings,
                 onMenuImport = if (uiState.desktopState == DesktopState.NO_ROOTFS) {
                     { importLauncher.launch(IMPORT_MIME_TYPES) }
-                } else {
-                    null
-                },
+                } else null,
                 onScreenshot = viewModel::onScreenshot,
                 onReboot = viewModel::onReboot,
                 onPowerOff = viewModel::onPowerOff,
@@ -130,20 +114,16 @@ fun HomeScreen(
                 onImportDroppedFile = viewModel::importAutoDiscover,
                 onReboot = viewModel::onReboot,
                 desktopLogHint = uiState.desktopLogHint,
-                modifier = Modifier.padding(horizontal = 14.dp),
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
             )
 
             AnimatedContent(
                 targetState = selectedTab,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxSize(),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
                 transitionSpec = {
-                    val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                    (slideInHorizontally(Motion.springSmoothOffset) { direction * it / 4 } + fadeIn(Motion.tweenQuick))
-                        .togetherWith(
-                            slideOutHorizontally(Motion.springSmoothOffset) { -direction * it / 4 } + fadeOut(Motion.tweenQuick),
-                        )
+                    val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (slideInHorizontally(Motion.springSmoothOffset) { dir * it / 5 } + fadeIn(Motion.tweenQuick))
+                        .togetherWith(slideOutHorizontally(Motion.springSmoothOffset) { -dir * it / 5 } + fadeOut(Motion.tweenQuick))
                 },
                 label = "coworkTab",
             ) { tab ->
@@ -152,14 +132,14 @@ fun HomeScreen(
                         messages = uiState.messages,
                         swarmTasks = uiState.swarmTasks,
                         isExecuting = uiState.isExecuting,
-                        composerBottomPadding = if (showChatComposer) composerBottomPadding else 0.dp,
+                        composerBottomPadding = if (showChatComposer) composerBottomPadding + 8.dp else 0.dp,
                         onQuickPrompt = viewModel::onQuickPrompt,
                     )
                     CoworkTab.Agents -> AgentsTabContent(isExecuting = uiState.isExecuting)
-                    CoworkTab.Skills -> SkillsTabContent(skillsDirLabel = skillsDir.absolutePath)
+                    CoworkTab.Skills -> SkillsTabContent(skillsDirLabel = settingsRepository.getSkillsDir().absolutePath)
                     CoworkTab.Schedule -> ScheduleTabContent(onScheduleDraft = viewModel::onScheduleDraft)
                     CoworkTab.Files -> FilesTabContent(
-                        artifactsDir = artifactsDir,
+                        artifactsDir = settingsRepository.getArtifactsDir(),
                         onOpenPath = viewModel::onOpenFilePath,
                     )
                     CoworkTab.Terminal -> TerminalTabContent(
@@ -169,46 +149,31 @@ fun HomeScreen(
                 }
             }
 
-            CoworkBottomNav(
-                selected = selectedTab,
-                onSelect = { selectedTab = it },
-            )
-        }
+            if (showChatComposer) {
+                ChatComposer(
+                    value = uiState.inputText,
+                    onValueChange = viewModel::onInputChange,
+                    onSend = viewModel::onSend,
+                    onStop = viewModel::onStop,
+                    isExecuting = uiState.isExecuting,
+                    executionMode = uiState.executionMode,
+                    onModeChange = viewModel::onModeChange,
+                    onFocusChange = { },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .onSizeChanged { composerHeightPx = it.height },
+                )
+            }
 
-        if (showChatComposer) {
-            ChatComposer(
-                value = uiState.inputText,
-                onValueChange = viewModel::onInputChange,
-                onSend = viewModel::onSend,
-                onStop = viewModel::onStop,
-                isExecuting = uiState.isExecuting,
-                executionMode = uiState.executionMode,
-                onModeChange = viewModel::onModeChange,
-                onFocusChange = { composerFocused = it },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .zIndex(20f)
-                    .imePadding()
-                    .navigationBarsPadding()
-                    .padding(bottom = 62.dp)
-                    .onSizeChanged { composerHeightPx = it.height },
-            )
+            CoworkBottomNav(selected = selectedTab, onSelect = { selectedTab = it })
         }
 
         SnackbarHost(
             hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .zIndex(30f),
+            modifier = Modifier.align(Alignment.BottomCenter).zIndex(30f),
         )
     }
 }
 
-private val IMPORT_MIME_TYPES = arrayOf(
-    "*/*",
-    "application/gzip",
-    "application/x-gzip",
-    "application/octet-stream",
-    "application/x-compressed-tar",
-)
+private val IMPORT_MIME_TYPES = arrayOf("*/*", "application/gzip", "application/x-gzip", "application/octet-stream", "application/x-compressed-tar")

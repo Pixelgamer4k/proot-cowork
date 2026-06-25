@@ -1,5 +1,6 @@
 package com.proot.cowork.ui.tabs
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,13 +12,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,14 +34,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
+import com.proot.cowork.ui.design.CoworkTokens
 
 private enum class ScheduleStatus { Pending, Done, Failed }
-
-private data class ScheduleItem(
-    val title: String,
-    val whenLabel: String,
-    val status: ScheduleStatus,
-)
+private data class ScheduleItem(val title: String, val whenLabel: String, val status: ScheduleStatus)
 
 private val DEMO_SCHEDULE = listOf(
     ScheduleItem("Run system backup and sync to cloud storage", "2026-06-26 03:00", ScheduleStatus.Pending),
@@ -47,114 +46,67 @@ private val DEMO_SCHEDULE = listOf(
 )
 
 @Composable
-fun ScheduleTabContent(
-    onScheduleDraft: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun ScheduleTabContent(onScheduleDraft: (String) -> Unit, modifier: Modifier = Modifier) {
     var draft by rememberSaveable { mutableStateOf("") }
-
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            Text(
-                text = stringResource(R.string.schedule_prompt),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Text(stringResource(R.string.schedule_prompt), color = CoworkTokens.TextSecondary)
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = draft,
                     onValueChange = { draft = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.schedule_placeholder)) },
+                    placeholder = { Text(stringResource(R.string.schedule_placeholder), color = CoworkTokens.TextMuted) },
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = CoworkTokens.ShapeCard,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CoworkTokens.Border,
+                        unfocusedBorderColor = CoworkTokens.Border,
+                        focusedContainerColor = CoworkTokens.Surface,
+                        unfocusedContainerColor = CoworkTokens.Surface,
+                    ),
+                    trailingIcon = { Icon(Icons.Default.KeyboardArrowRight, null, tint = CoworkTokens.TextMuted) },
                 )
+                Spacer(Modifier.size(8.dp))
                 Button(
-                    onClick = {
-                        if (draft.isNotBlank()) {
-                            onScheduleDraft(draft.trim())
-                            draft = ""
-                        }
-                    },
+                    onClick = { if (draft.isNotBlank()) { onScheduleDraft(draft.trim()); draft = "" } },
                     enabled = draft.isNotBlank(),
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Text(stringResource(R.string.schedule_action))
-                }
+                    shape = CoworkTokens.ShapeCard,
+                    colors = ButtonDefaults.buttonColors(containerColor = CoworkTokens.Mint, contentColor = CoworkTokens.SpeakFg),
+                ) { Text(stringResource(R.string.schedule_action), fontWeight = FontWeight.SemiBold) }
             }
-            Text(
-                text = stringResource(R.string.coming_soon_schedule),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
         }
-
-        items(DEMO_SCHEDULE) { item ->
-            ScheduleRow(item)
-        }
+        items(DEMO_SCHEDULE) { ScheduleRow(it) }
     }
 }
 
 @Composable
 private fun ScheduleRow(item: ScheduleItem) {
     val (label, color) = when (item.status) {
-        ScheduleStatus.Pending -> stringResource(R.string.status_pending) to MaterialTheme.colorScheme.tertiary
-        ScheduleStatus.Done -> stringResource(R.string.status_done) to MaterialTheme.colorScheme.primary
-        ScheduleStatus.Failed -> stringResource(R.string.status_failed) to MaterialTheme.colorScheme.error
+        ScheduleStatus.Pending -> stringResource(R.string.status_pending) to CoworkTokens.Pending
+        ScheduleStatus.Done -> stringResource(R.string.status_done) to CoworkTokens.Done
+        ScheduleStatus.Failed -> stringResource(R.string.status_failed) to CoworkTokens.Failed
     }
-
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        modifier = Modifier.fillMaxWidth(),
+        shape = CoworkTokens.ShapeCard,
+        color = CoworkTokens.Surface,
+        modifier = Modifier.fillMaxWidth().border(1.dp, CoworkTokens.Border, CoworkTokens.ShapeCard),
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Text(
-                    text = item.title,
-                    modifier = Modifier.weight(1f).padding(end = 8.dp),
-                    fontWeight = FontWeight.Medium,
-                )
-                Surface(shape = RoundedCornerShape(10.dp), color = color.copy(alpha = 0.18f)) {
-                    Text(
-                        text = label,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = color,
-                    )
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Text(item.title, Modifier.weight(1f).padding(end = 8.dp), color = CoworkTokens.TextPrimary, fontWeight = FontWeight.Medium)
+                Surface(shape = CoworkTokens.ShapePill, color = color.copy(alpha = 0.18f)) {
+                    Text(label, Modifier.padding(horizontal = 10.dp, vertical = 3.dp), color = color, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
                 }
             }
-            Row(
-                modifier = Modifier.padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    Icons.Default.Schedule,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.size(6.dp))
-                Text(
-                    text = item.whenLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Schedule, null, Modifier.size(14.dp), tint = CoworkTokens.TextMuted)
+                Spacer(Modifier.size(6.dp))
+                Text(item.whenLabel, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
         }
     }

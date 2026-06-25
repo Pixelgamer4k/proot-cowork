@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,11 +24,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.proot.cowork.ui.design.CoworkTokens
 import com.proot.cowork.ui.home.CoworkTab
 import com.proot.cowork.ui.theme.Motion
 
@@ -43,18 +41,14 @@ fun CoworkBottomNav(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .height(CoworkTokens.NavHeight)
+            .background(CoworkTokens.Bg.copy(alpha = 0.98f))
+            .padding(horizontal = 2.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CoworkTab.entries.forEach { tab ->
-            CoworkNavItem(
-                tab = tab,
-                selected = tab == selected,
-                onClick = { onSelect(tab) },
-                modifier = Modifier.weight(1f),
-            )
+            CoworkNavItem(tab = tab, selected = tab == selected, onClick = { onSelect(tab) }, modifier = Modifier.weight(1f))
         }
     }
 }
@@ -67,16 +61,12 @@ private fun CoworkNavItem(
     modifier: Modifier = Modifier,
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.05f else 1f,
+        targetValue = if (selected) 1.04f else 1f,
         animationSpec = Motion.springSnappy,
         label = "navScale",
     )
     val tint by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
-        },
+        targetValue = if (selected) CoworkTokens.Mint else CoworkTokens.TextMuted,
         animationSpec = Motion.tweenColorQuick,
         label = "navTint",
     )
@@ -84,35 +74,32 @@ private fun CoworkNavItem(
 
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Box(contentAlignment = Alignment.BottomCenter) {
-            Icon(
-                imageVector = tab.icon,
-                contentDescription = stringResource(tab.labelRes),
-                tint = tint,
+        if (selected) {
+            Box(
                 modifier = Modifier
-                    .scale(scale)
-                    .size(22.dp),
+                    .size(width = 20.dp, height = 2.dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(CoworkTokens.Mint),
             )
-            if (selected) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 26.dp)
-                        .size(width = 18.dp, height = 2.dp)
-                        .clip(RoundedCornerShape(1.dp))
-                        .background(MaterialTheme.colorScheme.primary),
-                )
-            }
+        } else {
+            Box(modifier = Modifier.size(width = 20.dp, height = 2.dp))
         }
+        Icon(
+            imageVector = tab.icon,
+            contentDescription = stringResource(tab.labelRes),
+            tint = tint,
+            modifier = Modifier.scale(scale).size(21.dp),
+        )
         Text(
             text = stringResource(tab.labelRes),
             color = tint,
-            fontSize = 10.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
         )

@@ -2,10 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.plugin.serialization")
 }
-
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 android {
     namespace = "com.proot.cowork"
@@ -16,7 +13,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 60
-        versionName = "0.13.0-koog-llm"
+        versionName = "0.13.0-llm"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -47,6 +44,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -58,22 +59,6 @@ android {
         }
         jniLibs {
             useLegacyPackaging = true
-        }
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
-    }
-}
-
-// Koog publishes Android + JVM variants; prefer JVM artifacts so minSdk 26 is preserved.
-configurations.configureEach {
-    resolutionStrategy.eachDependency {
-        if (requested.group == "ai.koog" && requested.name.endsWith("-android")) {
-            useTarget("${requested.group}:${requested.name.replace("-android", "-jvm")}:${requested.version}")
-            because("Use JVM Koog artifacts on Android (Android variants require minSdk 35)")
         }
     }
 }
@@ -105,11 +90,7 @@ dependencies {
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
 
-    implementation("ai.koog:agents-core-jvm:1.0.0")
-    implementation("ai.koog:agents-features-event-handler-jvm:1.0.0")
-    implementation("ai.koog:prompt-executor-openai-client-jvm:1.0.0")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
 

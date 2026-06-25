@@ -1,24 +1,12 @@
 package com.proot.cowork.domain.agent
 
-import ai.koog.agents.core.agent.AIAgent
-import ai.koog.agents.core.dsl.builder.strategy.streamingStrategy
-import ai.koog.agents.features.eventHandler.feature.handleEvents
-import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
-import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
-import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
-import ai.koog.prompt.llm.LLMCapability
-import ai.koog.prompt.llm.LLMModel
-import ai.koog.prompt.llm.LLMProvider
-import ai.koog.prompt.streaming.StreamFrame
 import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.llm.OpenAiCompatibleLlmClient
 import com.proot.cowork.data.prefs.LlmConfig
-import kotlinx.coroutines.CancellationException
-import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Runs Cowork chat through Koog [AIAgent] agents (Swarm vs Fast system prompts).
- * Streaming uses Koog event handlers when available, with OpenAI-compatible SSE fallback.
+ * Cowork chat runner with Swarm (multi-agent plan) and Fast (single-agent) modes.
+ * Uses the saved OpenAI-compatible endpoint (OpenRouter by default) with SSE streaming.
  */
 object CoworkKoogAgentRunner {
 
@@ -33,53 +21,6 @@ object CoworkKoogAgentRunner {
         require(LlmEndpoint.isConfigured(config)) { "Configure API key, base URL, and model in Settings" }
         val systemPrompt = systemPromptFor(mode)
         val temperature = if (mode == ExecutionMode.FAST) 0.3 else 0.5
-        val streamedText = AtomicReference("")
-
-        try {
-            val endpoint = LlmEndpoint.from(config)
-            val settings = OpenAIClientSettings(
-                baseUrl = endpoint.baseUrl,
-                chatCompletionsPath = endpoint.chatCompletionsPath,
-            )
-            val llmClient = OpenAILLMClient(apiKey = config.apiKey.trim(), settings = settings)
-            SingleLLMPromptExecutor(llmClient).use { executor ->
-                val model = LLModel(
-                    provider = LLMProvider.OpenAI,
-                    id = config.model.trim(),
-                    capabilities = listOf(LLMCapability.Temperature),
-                )
-                val agent = AIAgent(
-                    promptExecutor = executor,
-                    llmModel = model,
-                    strategy = streamingStrategy(),
-                    systemPrompt = systemPrompt,
-                    maxIterations = 8,
-                ) {
-                    handleEvents {
-                        onLLMStreamingFrameReceived { context ->
-                            if (!isActive()) return@onLLMStreamingFrameReceived
-                            when (val frame = context.streamFrame) {
-                                is StreamFrame.TextDelta -> {
-                                    streamedText.updateAndGet { it + frame.text }
-                                    onDelta(frame.text)
-                                }
-                                else -> Unit
-                            }
-                        }
-                    }
-                }
-
-                agent.use { runningAgent ->
-                    val result = runningAgent.run(userMessage)
-                    val combined = streamedText.get().ifBlank { result }
-                    if (combined.isNotBlank()) return combined
-                }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            // Fall through to direct OpenAI-compatible streaming.
-        }
 
         return OpenAiCompatibleLlmClient.streamChat(
             config = config,

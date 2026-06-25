@@ -1,2 +1,0 @@
--keep class ai.koog.** { *; }
--dontwarn ai.koog.**

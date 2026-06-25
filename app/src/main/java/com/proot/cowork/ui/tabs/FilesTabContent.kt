@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
@@ -44,7 +43,7 @@ fun FilesTabContent(artifactsDir: File, onOpenPath: (String) -> Unit, modifier: 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -56,7 +55,7 @@ fun FilesTabContent(artifactsDir: File, onOpenPath: (String) -> Unit, modifier: 
         }
         items(entries) { FileRow(it) { onOpenPath(it.path) } }
         item {
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 TextButton(onClick = { }) { Text(stringResource(R.string.files_new_folder), color = CoworkTokens.TextSecondary) }
                 TextButton(onClick = { }) { Text(stringResource(R.string.files_upload), color = CoworkTokens.TextSecondary) }
                 TextButton(onClick = { }) { Text(stringResource(R.string.files_select), color = CoworkTokens.TextSecondary) }
@@ -70,7 +69,7 @@ private fun FileRow(entry: FileEntry, onClick: () -> Unit) {
     val accent = if (entry.isDirectory) CoworkTokens.FolderAccent else CoworkTokens.FileAccent
     val icon: ImageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.Default.Description
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
@@ -81,12 +80,20 @@ private fun FileRow(entry: FileEntry, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) { Icon(icon, null, tint = accent, modifier = Modifier.size(18.dp)) }
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(entry.name, fontWeight = FontWeight.Medium, color = CoworkTokens.TextPrimary)
-            if (!entry.isDirectory) Text(entry.sizeLabel, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+        Text(
+            entry.name,
+            Modifier.weight(1f).padding(horizontal = 12.dp),
+            fontWeight = FontWeight.Medium,
+            color = CoworkTokens.TextPrimary,
+        )
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                if (entry.isDirectory) "--" else entry.sizeLabel,
+                color = CoworkTokens.TextMuted,
+                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+            )
+            Text(entry.dateLabel, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
         }
-        Text(entry.dateLabel, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
-        Icon(Icons.Default.ChevronRight, null, tint = CoworkTokens.TextMuted, modifier = Modifier.size(16.dp))
     }
 }
 

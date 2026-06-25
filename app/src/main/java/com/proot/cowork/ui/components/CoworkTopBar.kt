@@ -166,7 +166,7 @@ fun DesktopChromeTitleBar(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("Applications", color = CoworkTokens.TextSecondary, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
-        Text(time, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+        Text("N $time", color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
     }
 }
 

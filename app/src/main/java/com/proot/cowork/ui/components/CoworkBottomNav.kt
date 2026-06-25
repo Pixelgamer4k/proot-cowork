@@ -42,7 +42,7 @@ fun CoworkBottomNav(
             .fillMaxWidth()
             .navigationBarsPadding()
             .height(CoworkTokens.NavHeight)
-            .background(CoworkTokens.Bg.copy(alpha = 0.98f))
+            .background(CoworkTokens.SurfaceElevated.copy(alpha = 0.98f))
             .padding(horizontal = 2.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,

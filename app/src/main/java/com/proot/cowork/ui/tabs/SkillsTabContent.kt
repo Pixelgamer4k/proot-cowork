@@ -31,7 +31,7 @@ import com.proot.cowork.ui.design.CoworkTokens
 private data class SkillItem(val id: String, val description: String, val tags: List<String>, val uses: Int, val active: Boolean)
 
 private val SKILLS = listOf(
-    SkillItem("python-development", "Write, debug, and run Python code in the proot environment", listOf("python", "coding"), 47, true),
+    SkillItem("python-development", "Write, debug, and run Python code with best practices", listOf("python", "coding"), 47, true),
     SkillItem("web-automation", "Browse websites and automate form interactions", listOf("browser", "automation"), 23, true),
     SkillItem("file-management", "Organize, search, and manage files in the container", listOf("files", "system"), 31, true),
     SkillItem("data-analysis", "Analyze datasets with pandas and visualization tools", listOf("data", "python"), 0, false),
@@ -40,7 +40,7 @@ private val SKILLS = listOf(
 )
 
 @Composable
-fun SkillsTabContent(skillsDirLabel: String, modifier: Modifier = Modifier) {
+fun SkillsTabContent(@Suppress("UNUSED_PARAMETER") skillsDirLabel: String, modifier: Modifier = Modifier) {
     val active = SKILLS.filter { it.active }
     val available = SKILLS.filter { !it.active }
     LazyColumn(
@@ -48,7 +48,6 @@ fun SkillsTabContent(skillsDirLabel: String, modifier: Modifier = Modifier) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item { Text(stringResource(R.string.skills_dir_hint, skillsDirLabel), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
         item { CoworkSectionLabel(stringResource(R.string.skills_active_header, active.size)) }
         items(active) { SkillCard(it) }
         item { Spacer(Modifier.size(4.dp)); CoworkSectionLabel(stringResource(R.string.skills_available_header, available.size)) }
@@ -72,8 +71,8 @@ private fun SkillCard(skill: SkillItem) {
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     skill.tags.forEach { tag ->
-                        Surface(shape = CoworkTokens.ShapePill, color = CoworkTokens.Mint.copy(alpha = 0.12f)) {
-                            Text(tag, Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = CoworkTokens.Mint, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                        Surface(shape = CoworkTokens.ShapePill, color = CoworkTokens.Mint.copy(alpha = 0.22f)) {
+                            Text(tag, Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = CoworkTokens.SpeakFg, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
                         }
                     }
                 }

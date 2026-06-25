@@ -5,8 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,7 +43,6 @@ private val QUICK_PROMPTS = listOf(
     "Run system update",
 )
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChatTabContent(
     messages: List<AgentMessage>,
@@ -76,36 +73,44 @@ fun ChatTabContent(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(52.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(16.dp))
                             .background(CoworkTokens.Mint.copy(alpha = 0.12f))
-                            .border(1.dp, CoworkTokens.Mint.copy(alpha = 0.25f), RoundedCornerShape(14.dp)),
+                            .border(1.dp, CoworkTokens.Mint.copy(alpha = 0.25f), RoundedCornerShape(16.dp)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Default.SmartToy, null, tint = CoworkTokens.Mint, modifier = Modifier.size(28.dp))
+                        Icon(Icons.Default.SmartToy, null, tint = CoworkTokens.Mint, modifier = Modifier.size(30.dp))
                     }
                     Spacer(modifier = Modifier.size(12.dp))
                     Text(stringResource(R.string.agent_empty_title), fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
                     Spacer(modifier = Modifier.size(6.dp))
                     Text(stringResource(R.string.agent_empty_hint), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.size(14.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        QUICK_PROMPTS.forEach { prompt ->
-                            Surface(
-                                onClick = { onQuickPrompt(prompt) },
-                                shape = CoworkTokens.ShapePill,
-                                color = CoworkTokens.SurfaceElevated,
+                        QUICK_PROMPTS.chunked(2).forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                Text(
-                                    prompt,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-                                    color = CoworkTokens.TextSecondary,
-                                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                                )
+                                row.forEach { prompt ->
+                                    Surface(
+                                        onClick = { onQuickPrompt(prompt) },
+                                        shape = CoworkTokens.ShapePill,
+                                        color = CoworkTokens.SurfaceElevated,
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Text(
+                                            prompt,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                            color = CoworkTokens.TextSecondary,
+                                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                                        )
+                                    }
+                                }
+                                if (row.size == 1) Spacer(Modifier.weight(1f))
                             }
                         }
                     }

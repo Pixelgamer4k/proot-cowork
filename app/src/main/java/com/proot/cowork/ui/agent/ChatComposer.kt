@@ -136,6 +136,7 @@ fun ChatComposer(
                     onClick = { modeMenuOpen = true },
                     shape = CoworkTokens.ShapePill,
                     color = CoworkTokens.SurfaceElevated,
+                    modifier = Modifier.border(1.dp, CoworkTokens.Mint.copy(alpha = 0.45f), CoworkTokens.ShapePill),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),

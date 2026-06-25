@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Terminal
@@ -46,6 +48,8 @@ private val DEMO_AGENTS = listOf(
     AgentCardModel("Researcher", "Information Gathering", 56, false, Icons.Default.Search),
     AgentCardModel("Executor", "Command Execution", 89, true, Icons.Default.Terminal),
     AgentCardModel("Coder", "Code Generation", 67, false, Icons.Default.Code),
+    AgentCardModel("Validator", "Quality Assurance", 41, true, Icons.Default.Verified),
+    AgentCardModel("Slack", "Notifications", 12, true, Icons.Default.Notifications),
 )
 
 @Composable
@@ -119,7 +123,10 @@ private fun AgentRow(agent: AgentCardModel, highlight: Boolean) {
                 }
                 Text(agent.role, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
-            Text(stringResource(R.string.agent_task_count, agent.tasks), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${agent.tasks}", color = CoworkTokens.TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.tasks_label), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }

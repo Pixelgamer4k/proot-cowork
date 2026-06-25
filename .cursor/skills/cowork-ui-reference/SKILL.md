@@ -30,7 +30,9 @@ Match the reference mocks exactly. Source images: `Cowork-image-references/img_*
 ## Layout shell (every tab)
 
 1. **Top bar** — hamburger | orange dot + `ubuntu` + teal status dot (center) | camera, refresh, power
-2. **Desktop window** — rounded 16dp, border, title bar `Applications` + timestamp, X11 content clipped inside, optional dock overlay at bottom of frame
+## Desktop preview (all tabs)
+
+When X11 is not live, render `DesktopReferenceMock`: blue gradient wallpaper, `+` grid, left shortcuts (File System / Home / Settings), centered mint agent tile, bottom dock. Title bar shows `Applications` and `N yyyy-MM-dd HH:mm`. Live X11 clips inside the same chrome when running.
 3. **Tab body** — scrollable content below desktop
 4. **Tab-specific footer** — Chat: large composer; Terminal: `~ $ Enter command…` pill
 5. **Bottom nav** — 6 tabs; active = mint icon + label + 2dp mint bar above icon

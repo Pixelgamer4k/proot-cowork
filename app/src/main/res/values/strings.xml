@@ -68,6 +68,7 @@
     <string name="active_agents">Active Agents</string>
     <string name="agents_online_count">%1$d Online</string>
     <string name="agent_task_count">%1$d tasks</string>
+    <string name="tasks_label">tasks</string>
     <string name="coming_soon_swarm">Live swarm orchestration connects in Phase 3.</string>
     <string name="skills_active_header">ACTIVE (%1$d)</string>
     <string name="skills_available_header">AVAILABLE (%1$d)</string>

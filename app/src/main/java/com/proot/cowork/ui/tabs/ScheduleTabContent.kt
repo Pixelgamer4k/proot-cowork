@@ -16,8 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -41,8 +41,9 @@ private data class ScheduleItem(val title: String, val whenLabel: String, val st
 
 private val DEMO_SCHEDULE = listOf(
     ScheduleItem("Run system backup and sync to cloud storage", "2026-06-26 03:00", ScheduleStatus.Pending),
-    ScheduleItem("Update all Python packages in venv", "2026-06-25 18:00", ScheduleStatus.Done),
-    ScheduleItem("Generate weekly project status report", "2026-06-24 09:00", ScheduleStatus.Failed),
+    ScheduleItem("Update all Python packages in venv", "2026-06-25 18:00", ScheduleStatus.Pending),
+    ScheduleItem("Generate weekly project report", "2026-06-25 14:30", ScheduleStatus.Done),
+    ScheduleItem("Clean up temp files and logs older than 7 days", "2026-06-24 12:00", ScheduleStatus.Failed),
 )
 
 @Composable
@@ -72,11 +73,12 @@ fun ScheduleTabContent(onScheduleDraft: (String) -> Unit, modifier: Modifier = M
                     trailingIcon = { Icon(Icons.Default.KeyboardArrowRight, null, tint = CoworkTokens.TextMuted) },
                 )
                 Spacer(Modifier.size(8.dp))
-                Button(
+                OutlinedButton(
                     onClick = { if (draft.isNotBlank()) { onScheduleDraft(draft.trim()); draft = "" } },
                     enabled = draft.isNotBlank(),
                     shape = CoworkTokens.ShapeCard,
-                    colors = ButtonDefaults.buttonColors(containerColor = CoworkTokens.Mint, contentColor = CoworkTokens.SpeakFg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CoworkTokens.Mint),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CoworkTokens.Mint),
                 ) { Text(stringResource(R.string.schedule_action), fontWeight = FontWeight.SemiBold) }
             }
         }

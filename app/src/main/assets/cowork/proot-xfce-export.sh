@@ -174,20 +174,19 @@ fi
 
 copy_tree() {
   local src="$1" dest="$2"
+  local -a ex=(
+    --exclude='var/lib/snapd' --exclude='snap'
+    --exclude='proc' --exclude='sys' --exclude='dev' --exclude='run' --exclude='tmp'
+    --exclude='mnt' --exclude='data' --exclude='storage' --exclude='sdcard'
+    --exclude='apex' --exclude='odm' --exclude='product' --exclude='system'
+    --exclude='system_ext' --exclude='vendor' --exclude='linkerconfig'
+  )
   if command -v rsync >/dev/null; then
-    rsync -aHAXx \
-      --exclude='var/lib/snapd' \
-      --exclude='snap' \
-      --exclude='proc' \
-      --exclude='sys' \
-      --exclude='dev' \
-      --exclude='run' \
-      --exclude='tmp' \
-      "$src/" "$dest/"
+    rsync -aHAXx "${ex[@]}" "$src/" "$dest/"
   else
     rm -rf "$dest"
     mkdir -p "$dest"
-    cp -a "$src/." "$dest/"
+    (cd "$src" && tar -cf - "${ex[@]}" .) | (cd "$dest" && tar -xf -)
   fi
 }
 

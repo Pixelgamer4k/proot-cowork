@@ -29,10 +29,21 @@ cp -a "$ROOT/scripts/ubuntu-container-sysdata/." "$WORKDIR/ubuntu/sysdata/"
 cp "$MANIFEST_TEMPLATE" "$WORKDIR/ubuntu/manifest.json"
 
 chmod +x "$ROOT/scripts/ubuntu-xfce-guest-install.sh"
+chmod +x "$ROOT/scripts/cowork-guest-layer.sh"
+
+BUNDLE="$WORKDIR/cowork-bundle"
+mkdir -p "$BUNDLE/cowork-assets/computer-use" "$BUNDLE/cowork-assets/bin"
+cp "$ROOT/scripts/cowork-guest-layer.sh" "$BUNDLE/"
+cp -a "$ROOT/app/src/main/assets/cowork/computer-use/." "$BUNDLE/cowork-assets/computer-use/"
+for f in cowork-agent cowork-dispatch cowork-desktop-test; do
+  cp "$ROOT/app/src/main/assets/cowork/${f}.sh" "$BUNDLE/cowork-assets/bin/$f"
+  chmod 755 "$BUNDLE/cowork-assets/bin/$f"
+done
 
 CID="$(docker create --platform linux/arm64 ubuntu:24.04 sleep infinity)"
 trap 'docker rm -f "$CID" >/dev/null 2>&1 || true; rm -rf "$WORKDIR"' EXIT
 docker start "$CID"
+docker cp "$BUNDLE" "$CID:/cowork-bundle"
 docker cp "$ROOT/scripts/ubuntu-xfce-guest-install.sh" "$CID:/install.sh"
 docker exec "$CID" bash /install.sh
 docker cp "$CID:/out/." "$WORKDIR/ubuntu/rootfs/"
@@ -40,7 +51,8 @@ docker cp "$CID:/out/." "$WORKDIR/ubuntu/rootfs/"
 echo "==> Verifying guest rootfs"
 test -f "$WORKDIR/ubuntu/rootfs/usr/bin/bash"
 test -f "$WORKDIR/ubuntu/rootfs/usr/bin/startxfce4" || test -f "$WORKDIR/ubuntu/rootfs/usr/bin/xfce4-session"
-test -f "$WORKDIR/ubuntu/rootfs/usr/share/backgrounds/xfce/xfce-blue.jpg"
+test -f "$WORKDIR/ubuntu/rootfs/opt/cowork/computer-use/cowork_desktop.py"
+test -x "$WORKDIR/ubuntu/rootfs/usr/local/bin/firefox" || test -x "$WORKDIR/ubuntu/rootfs/opt/firefox/firefox"
 
 mkdir -p "$(dirname "$OUTPUT")"
 echo "==> Packing $(basename "$OUTPUT")"

@@ -6,9 +6,12 @@ on:
     branches: [main, master]
     paths:
       - scripts/ubuntu-xfce-guest-install.sh
+      - scripts/cowork-guest-layer.sh
+      - scripts/cowork-automation-finish.sh
       - scripts/build-ubuntu-xfce-container.sh
       - scripts/ubuntu-container-manifest.json
       - scripts/ubuntu-container-sysdata/**
+      - app/src/main/assets/cowork/**
       - .github/workflows/build-rootfs.yml
 
 jobs:
@@ -23,18 +26,24 @@ jobs:
       - name: Set up QEMU for arm64 Docker
         uses: docker/setup-qemu-action@v3
 
-      - name: Build full Ubuntu + XFCE rootfs
-        run: |
-          bash scripts/build-ubuntu-xfce-container.sh
+      - name: Build Ubuntu + XFCE + Cowork automation rootfs
+        run: bash scripts/build-ubuntu-xfce-container.sh
         env:
           OUTPUT: dist/proot-cowork-ubuntu.tar.gz
           FORCE: "1"
 
-      - name: Rootfs info
+      - name: Verify cowork automation in archive
         run: |
+          set -euo pipefail
+          ARCHIVE=dist/proot-cowork-ubuntu.tar.gz
           ls -lh dist/
-          tar -tzf dist/proot-cowork-ubuntu.tar.gz | head -20
-          echo "total entries: $(tar -tzf dist/proot-cowork-ubuntu.tar.gz | wc -l)"
+          tar -tzf "$ARCHIVE" | head -20
+          echo "total entries: $(tar -tzf "$ARCHIVE" | wc -l)"
+          tar -tzf "$ARCHIVE" | grep -q 'ubuntu/rootfs/opt/cowork/computer-use/cowork_desktop.py'
+          tar -tzf "$ARCHIVE" | grep -qE 'ubuntu/rootfs/opt/firefox/firefox|ubuntu/rootfs/usr/local/bin/firefox'
+          tar -tzf "$ARCHIVE" | grep -q 'ubuntu/rootfs/usr/bin/xdotool'
+          tar -tzf "$ARCHIVE" | grep -q 'ubuntu/manifest.json'
+          echo "cowork automation checks passed"
 
       - name: Upload rootfs artifact
         uses: actions/upload-artifact@v4
@@ -47,8 +56,11 @@ jobs:
       - name: Summary
         run: |
           SIZE=$(du -h dist/proot-cowork-ubuntu.tar.gz | cut -f1)
-          echo "## Rootfs build complete" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Artifact:** \`proot-cowork-ubuntu-rootfs\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **File:** \`proot-cowork-ubuntu.tar.gz\` ($SIZE)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Import in Cowork:** Choose file or drop into \`Android/data/com.proot/files/\`" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Cowork rootfs build complete"
+            echo ""
+            echo "- **Artifact:** \`proot-cowork-ubuntu-rootfs\`"
+            echo "- **File:** \`proot-cowork-ubuntu.tar.gz\` ($SIZE)"
+            echo "- **Includes:** XFCE, Firefox (Mozilla aarch64), cowork computer-use agent"
+            echo "- **Import:** \`Android/data/com.proot/files/proot-cowork-ubuntu.tar.gz\` or file picker"
+          } >> "$GITHUB_STEP_SUMMARY"

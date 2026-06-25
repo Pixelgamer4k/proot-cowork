@@ -10,12 +10,17 @@ import java.io.File
 object CoworkAssetInstaller {
 
     private const val TAG = "CoworkAssetInstaller"
-    private const val MARKER = ".cowork_assets_v6"
+    private const val MARKER = ".cowork_assets_v7"
 
     private val SCRIPTS = listOf(
         "proot-xfce-install.sh",
         "proot-xfce-start.sh",
         "proot-xfce-export.sh",
+        "proot-xfce-cowork-setup.sh",
+        "cowork-guest-layer.sh",
+        "cowork-agent.sh",
+        "cowork-dispatch.sh",
+        "cowork-desktop-test.sh",
     )
 
     fun installIfNeeded(context: Context, prefix: File) {
@@ -39,6 +44,7 @@ object CoworkAssetInstaller {
         }
 
         installXfcePerfConfig(context, shareDir)
+        installComputerUseAssets(context, shareDir)
         installContainerExportAssets(context, shareDir)
         marker.createNewFile()
         Log.i(TAG, "installed proot XFCE scripts under ${shareDir.absolutePath}")
@@ -65,6 +71,33 @@ object CoworkAssetInstaller {
             }
         } catch (e: Exception) {
             Log.w(TAG, "ubuntu sysdata stubs missing: ${e.message}")
+        }
+    }
+
+    private fun installComputerUseAssets(context: Context, shareDir: File) {
+        copyAssetTree(context, "cowork/computer-use", File(shareDir, "computer-use"))
+    }
+
+    private fun copyAssetTree(context: Context, assetPath: String, destDir: File) {
+        destDir.mkdirs()
+        try {
+            context.assets.list(assetPath)?.forEach { name ->
+                val childAsset = "$assetPath/$name"
+                val childDest = File(destDir, name)
+                val nested = context.assets.list(childAsset)
+                if (!nested.isNullOrEmpty()) {
+                    copyAssetTree(context, childAsset, childDest)
+                } else {
+                    context.assets.open(childAsset).use { input ->
+                        childDest.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    if (name.endsWith(".sh") || name.endsWith(".py")) {
+                        chmodExecutable(childDest)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "asset tree $assetPath: ${e.message}")
         }
     }
 

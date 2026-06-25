@@ -37,95 +37,121 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
+import com.proot.cowork.domain.agent.SwarmAgentState
+import com.proot.cowork.domain.agent.SwarmAgentType
+import com.proot.cowork.domain.agent.TaskStatus
 import com.proot.cowork.ui.components.CoworkCard
 import com.proot.cowork.ui.design.CoworkTokens
 import com.proot.cowork.ui.theme.Motion
 
-private data class AgentCardModel(val name: String, val role: String, val tasks: Int, val online: Boolean, val icon: ImageVector)
-
-private val DEMO_AGENTS = listOf(
-    AgentCardModel("Planner", "Task Planning", 24, true, Icons.Default.Psychology),
-    AgentCardModel("Researcher", "Information Gathering", 56, false, Icons.Default.Search),
-    AgentCardModel("Executor", "Command Execution", 89, true, Icons.Default.Terminal),
-    AgentCardModel("Coder", "Code Generation", 67, false, Icons.Default.Code),
-    AgentCardModel("Validator", "Quality Assurance", 41, true, Icons.Default.Verified),
-    AgentCardModel("Slack", "Notifications", 12, true, Icons.Default.Notifications),
-)
+private fun iconFor(agent: SwarmAgentType): ImageVector = when (agent) {
+    SwarmAgentType.Planner -> Icons.Default.Psychology
+    SwarmAgentType.Researcher -> Icons.Default.Search
+    SwarmAgentType.Executor -> Icons.Default.Terminal
+    SwarmAgentType.Coder -> Icons.Default.Code
+    SwarmAgentType.Validator -> Icons.Default.Verified
+    SwarmAgentType.Slack -> Icons.Default.Notifications
+}
 
 @Composable
-fun AgentsTabContent(isExecuting: Boolean, modifier: Modifier = Modifier) {
-    val onlineCount = DEMO_AGENTS.count { it.online } + if (isExecuting) 1 else 0
+fun AgentsTabContent(
+    agentStates: List<SwarmAgentState>,
+    isExecuting: Boolean,
+    maxAgentPool: Int,
+    modifier: Modifier = Modifier,
+) {
+    val onlineCount = agentStates.count {
+        it.status == TaskStatus.RUNNING || it.status == TaskStatus.COMPLETED
+    }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            CoworkCard {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.active_agents), fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
-                    Surface(shape = CoworkTokens.ShapePill, color = CoworkTokens.Mint.copy(alpha = 0.14f)) {
-                        Text(
-                            stringResource(R.string.agents_online_count, onlineCount.coerceAtMost(6)),
-                            Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            color = CoworkTokens.Mint,
-                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-                AgentActivityChart(isExecuting)
-            }
-        }
-        items(DEMO_AGENTS) { AgentRow(it, isExecuting && it.name == "Planner") }
-    }
-}
-
-@Composable
-private fun AgentActivityChart(active: Boolean) {
-    val heights = listOf(0.32f, 0.52f, 0.72f, 0.48f, 0.88f, if (active) 1f else 0.38f)
-    val labels = listOf("Pln", "Res", "Exe", "Cod", "Val", "Sl")
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-        heights.zip(labels).forEach { (target, label) ->
-            val h by animateFloatAsState(target, Motion.springSmooth, label = "bar")
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier
-                        .size(width = 26.dp, height = maxOf(8.dp, (68 * h).dp))
-                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
-                        .background(CoworkTokens.Mint.copy(alpha = 0.28f + h * 0.45f)),
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.active_agents), fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
+                Text(
+                    stringResource(R.string.agents_online_count, onlineCount.coerceAtLeast(if (isExecuting) 1 else 0)),
+                    color = CoworkTokens.Mint,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
                 )
-                Spacer(Modifier.height(6.dp))
-                Text(label, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
             }
+            Text(
+                stringResource(R.string.agent_pool_limit, maxAgentPool),
+                color = CoworkTokens.TextMuted,
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            AgentActivityBar(agentStates, isExecuting)
+        }
+        items(agentStates, key = { it.type.name }) { agent ->
+            AgentCard(agent, isExecuting)
         }
     }
 }
 
 @Composable
-private fun AgentRow(agent: AgentCardModel, highlight: Boolean) {
-    Surface(
-        shape = CoworkTokens.ShapeCard,
-        color = if (highlight) CoworkTokens.Mint.copy(alpha = 0.08f) else CoworkTokens.Surface,
-        modifier = Modifier.fillMaxWidth().border(1.dp, CoworkTokens.Border, CoworkTokens.ShapeCard),
+private fun AgentActivityBar(agentStates: List<SwarmAgentState>, isExecuting: Boolean) {
+    val active = agentStates.count { it.status == TaskStatus.RUNNING }
+    val progress by animateFloatAsState(
+        targetValue = if (isExecuting) (active.toFloat() / agentStates.size.coerceAtLeast(1)).coerceIn(0.1f, 1f) else 0.15f,
+        animationSpec = Motion.springSmooth,
+        label = "agentBar",
+    )
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(CircleShape)
+            .background(CoworkTokens.SurfaceElevated),
     ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .fillMaxWidth(progress)
+                .height(6.dp)
+                .clip(CircleShape)
+                .background(CoworkTokens.Mint),
+        )
+    }
+}
+
+@Composable
+private fun AgentCard(agent: SwarmAgentState, isExecuting: Boolean) {
+    val online = agent.status == TaskStatus.RUNNING || (isExecuting && agent.tasksCompleted > 0)
+    CoworkCard {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(40.dp).clip(CoworkTokens.ShapeIconTile).background(CoworkTokens.SurfaceElevated).border(1.dp, CoworkTokens.Border, CoworkTokens.ShapeIconTile),
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(if (online) CoworkTokens.Mint.copy(alpha = 0.15f) else CoworkTokens.SurfaceElevated),
                 contentAlignment = Alignment.Center,
-            ) { Icon(agent.icon, null, tint = CoworkTokens.Mint) }
+            ) {
+                Icon(iconFor(agent.type), null, tint = if (online) CoworkTokens.Mint else CoworkTokens.TextMuted, modifier = Modifier.size(18.dp))
+            }
             Spacer(Modifier.size(12.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(agent.name, fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
-                    Spacer(Modifier.size(6.dp))
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(if (agent.online) CoworkTokens.Mint else CoworkTokens.TextMuted))
-                }
-                Text(agent.role, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Text(agent.type.displayName, fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
+                Text(
+                    agent.currentTask ?: when (agent.status) {
+                        TaskStatus.RUNNING -> stringResource(R.string.agent_working)
+                        TaskStatus.COMPLETED -> stringResource(R.string.agent_idle_done)
+                        TaskStatus.FAILED -> stringResource(R.string.agent_idle_failed)
+                        else -> stringResource(R.string.agent_idle)
+                    },
+                    color = CoworkTokens.TextMuted,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text("${agent.tasks}", color = CoworkTokens.TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.tasks_label), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+            Surface(shape = CoworkTokens.ShapePill, color = CoworkTokens.SurfaceElevated, modifier = Modifier.border(1.dp, CoworkTokens.Border, CoworkTokens.ShapePill)) {
+                Text(
+                    stringResource(R.string.agent_task_count, agent.tasksCompleted),
+                    Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    color = CoworkTokens.TextSecondary,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                )
             }
         }
     }

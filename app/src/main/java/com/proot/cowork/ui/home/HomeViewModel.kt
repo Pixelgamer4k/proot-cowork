@@ -1,5 +1,6 @@
 package com.proot.cowork.ui.home
 
+import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -9,10 +10,16 @@ import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.ImportResult
 import com.proot.cowork.data.rootfs.RootfsRepository
+import com.proot.cowork.domain.agent.AgentExecutionSession
 import com.proot.cowork.domain.agent.AgentMessage
-import com.proot.cowork.domain.agent.CoworkKoogAgentRunner
+import com.proot.cowork.domain.agent.CoworkAgentRunner
+import com.proot.cowork.domain.agent.DEFAULT_MAX_AGENT_POOL
 import com.proot.cowork.domain.agent.ExecutionMode
 import com.proot.cowork.domain.agent.MessageRole
+import com.proot.cowork.domain.agent.SwarmAgentState
+import com.proot.cowork.domain.agent.SwarmAgentType
+import com.proot.cowork.domain.agent.SwarmTask
+import com.proot.cowork.domain.agent.TaskPlan
 import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.domain.importing.ImportPhase
 import com.proot.cowork.domain.importing.ImportSession
@@ -20,6 +27,7 @@ import com.proot.cowork.domain.importing.ImportUiState
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.domain.vnc.VncSession
+import com.proot.cowork.service.AgentExecutionService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,10 +45,14 @@ data class HomeUiState(
     val distroName: String = "",
     val desktopLogHint: String? = null,
     val messages: List<AgentMessage> = emptyList(),
-    val swarmTasks: List<com.proot.cowork.domain.agent.SwarmTask> = emptyList(),
+    val swarmTasks: List<SwarmTask> = emptyList(),
+    val agentStates: List<SwarmAgentState> = SwarmAgentType.entries.map { SwarmAgentState(it) },
     val executionMode: ExecutionMode = ExecutionMode.SWARM,
     val inputText: String = "",
     val isExecuting: Boolean = false,
+    val awaitingApproval: Boolean = false,
+    val pendingPlan: TaskPlan? = null,
+    val maxAgentPool: Int = DEFAULT_MAX_AGENT_POOL,
     val importError: String? = null,
     val isImportBusy: Boolean = false,
     val isApiConfigured: Boolean = false,
@@ -48,13 +60,36 @@ data class HomeUiState(
 )
 
 class HomeViewModel(
+    private val application: Application,
     private val settingsRepository: SettingsRepository,
     private val rootfsRepository: RootfsRepository,
     private val prootContainerRepository: ProotContainerRepository,
 ) : ViewModel() {
 
+    private val agentRunner = CoworkAgentRunner(application)
     private val localState = MutableStateFlow(HomeUiState())
     private var chatJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            AgentExecutionSession.snapshot.collect { snap ->
+                localState.update { local ->
+                    local.copy(
+                        messages = if (snap.messages.isNotEmpty()) {
+                            mergeMessages(local.messages, snap.messages)
+                        } else {
+                            local.messages
+                        },
+                        swarmTasks = snap.swarmTasks.ifEmpty { local.swarmTasks },
+                        agentStates = snap.agentStates,
+                        isExecuting = snap.isRunning,
+                        awaitingApproval = snap.awaitingApproval || local.awaitingApproval,
+                        pendingPlan = snap.pendingPlan ?: local.pendingPlan,
+                    )
+                }
+            }
+        }
+    }
 
     val uiState: StateFlow<HomeUiState> = combine(
         combine(
@@ -80,6 +115,21 @@ class HomeViewModel(
             },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
+
+    private fun mergeMessages(existing: List<AgentMessage>, incoming: List<AgentMessage>): List<AgentMessage> {
+        if (incoming.isEmpty()) return existing
+        val byId = existing.associateBy { it.id }.toMutableMap()
+        incoming.forEach { byId[it.id] = it }
+        val existingIds = existing.map { it.id }.toMutableSet()
+        val merged = existing.map { byId[it.id] ?: it }.toMutableList()
+        incoming.forEach { msg ->
+            if (msg.id !in existingIds) {
+                merged.add(msg)
+                existingIds.add(msg.id)
+            }
+        }
+        return merged
+    }
 
     private fun resolveDesktopState(
         installed: Boolean,
@@ -191,12 +241,14 @@ class HomeViewModel(
     fun onStop() {
         chatJob?.cancel()
         chatJob = null
+        AgentExecutionService.stop(application)
+        AgentExecutionSession.setRunning(false)
         localState.update { it.copy(isExecuting = false) }
     }
 
     fun onSend() {
         val text = localState.value.inputText.trim()
-        if (text.isEmpty() || localState.value.isExecuting) return
+        if (text.isEmpty() || localState.value.isExecuting || localState.value.awaitingApproval) return
 
         chatJob?.cancel()
         chatJob = viewModelScope.launch {
@@ -214,58 +266,60 @@ class HomeViewModel(
                 content = text,
             )
             val assistantId = UUID.randomUUID().toString()
-            val assistantPlaceholder = AgentMessage(
-                id = assistantId,
-                role = MessageRole.ASSISTANT,
-                content = "",
-            )
+            val history = localState.value.messages
 
             localState.update {
                 it.copy(
                     inputText = "",
                     isExecuting = true,
                     chatError = null,
-                    messages = it.messages + userMsg + assistantPlaceholder,
+                    awaitingApproval = false,
+                    pendingPlan = null,
+                    messages = it.messages + userMsg + AgentMessage(assistantId, MessageRole.ASSISTANT, ""),
                     swarmTasks = emptyList(),
                 )
             }
 
             val mode = localState.value.executionMode
-            val historyBeforeAssistant = localState.value.messages.dropLast(1)
-
             try {
-                val response = CoworkKoogAgentRunner.streamChat(
-                    config = config,
-                    mode = mode,
-                    history = historyBeforeAssistant,
-                    userMessage = text,
-                    isActive = { chatJob?.isActive == true },
-                ) { delta ->
-                    localState.update { state ->
-                        state.copy(
-                            messages = state.messages.map { msg ->
-                                if (msg.id == assistantId) msg.copy(content = msg.content + delta) else msg
-                            },
-                        )
+                when (mode) {
+                    ExecutionMode.SWARM -> {
+                        val plan = agentRunner.planSwarm(
+                            config = config,
+                            userTask = text,
+                            history = history + userMsg,
+                            isActive = { chatJob?.isActive == true },
+                        ) { delta ->
+                            localState.update { state ->
+                                state.copy(
+                                    messages = state.messages.map { msg ->
+                                        if (msg.id == assistantId) msg.copy(content = msg.content + delta) else msg
+                                    },
+                                )
+                            }
+                        }
+                        AgentExecutionSession.setAwaitingApproval(plan)
+                        localState.update {
+                            it.copy(
+                                isExecuting = false,
+                                awaitingApproval = true,
+                                pendingPlan = plan,
+                                swarmTasks = plan.subtasks,
+                                messages = it.messages.map { msg ->
+                                    if (msg.id == assistantId && msg.content.isBlank()) {
+                                        msg.copy(content = plan.summary)
+                                    } else {
+                                        msg
+                                    }
+                                },
+                            )
+                        }
                     }
-                }
-
-                val finalText = response.ifBlank {
-                    localState.value.messages.lastOrNull { it.id == assistantId }?.content.orEmpty()
-                }
-
-                localState.update { state ->
-                    state.copy(
-                        isExecuting = false,
-                        messages = state.messages.map { msg ->
-                            if (msg.id == assistantId) msg.copy(content = finalText.ifBlank { "No response from model." }) else msg
-                        },
-                        swarmTasks = if (mode == ExecutionMode.SWARM) {
-                            CoworkKoogAgentRunner.parseSwarmTasks(finalText, text)
-                        } else {
-                            emptyList()
-                        },
-                    )
+                    ExecutionMode.FAST -> {
+                        val historyForRun = history + userMsg
+                        AgentExecutionService.startFast(application, text, historyForRun)
+                        localState.update { it.copy(isExecuting = true) }
+                    }
                 }
             } catch (e: Exception) {
                 localState.update { state ->
@@ -276,6 +330,35 @@ class HomeViewModel(
                     )
                 }
             }
+        }
+    }
+
+    fun onApprovePlan() {
+        val plan = localState.value.pendingPlan?.copy(subtasks = localState.value.swarmTasks) ?: return
+        val history = localState.value.messages
+        localState.update {
+            it.copy(
+                awaitingApproval = false,
+                pendingPlan = null,
+                isExecuting = true,
+            )
+        }
+        AgentExecutionService.startSwarm(application, plan, history, localState.value.maxAgentPool)
+    }
+
+    fun onRejectPlan() {
+        localState.update {
+            it.copy(awaitingApproval = false, pendingPlan = null, swarmTasks = emptyList())
+        }
+        AgentExecutionSession.clearApproval()
+    }
+
+    fun onUpdateSwarmTask(taskId: String, title: String) {
+        localState.update { state ->
+            val tasks = state.swarmTasks.map { if (it.id == taskId) it.copy(title = title) else it }
+            val plan = state.pendingPlan?.copy(subtasks = tasks)
+            if (plan != null) AgentExecutionSession.updatePlan(plan)
+            state.copy(swarmTasks = tasks, pendingPlan = plan)
         }
     }
 
@@ -352,6 +435,7 @@ class HomeViewModel(
         }
 
         fun factory(
+            application: Application,
             settingsRepository: SettingsRepository,
             rootfsRepository: RootfsRepository,
             prootContainerRepository: ProotContainerRepository,
@@ -359,6 +443,7 @@ class HomeViewModel(
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return HomeViewModel(
+                    application,
                     settingsRepository,
                     rootfsRepository,
                     prootContainerRepository,

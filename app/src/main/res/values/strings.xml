@@ -67,6 +67,15 @@
     <string name="desktop_off">Off</string>
     <string name="speak">Speak</string>
     <string name="swarm_plan_title">Swarm plan</string>
+    <string name="swarm_tap_execute_hint">Review the plan below, edit tasks if needed, then tap Execute to approve.</string>
+    <string name="swarm_execute">Execute</string>
+    <string name="swarm_awaiting_execute">Tap Execute on the swarm plan to approve.</string>
+    <string name="cancel">Cancel</string>
+    <string name="agent_notification_title">Cowork agents</string>
+    <string name="agent_pool_limit">Parallel agent pool: up to %1$d sub-agents</string>
+    <string name="agent_idle">Standing by</string>
+    <string name="agent_idle_done">Idle — task complete</string>
+    <string name="agent_idle_failed">Idle — task failed</string>
     <string name="active_agents">Active Agents</string>
     <string name="agents_online_count">%1$d Online</string>
     <string name="agent_task_count">%1$d tasks</string>

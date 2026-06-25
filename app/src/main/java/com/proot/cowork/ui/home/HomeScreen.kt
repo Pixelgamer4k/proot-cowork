@@ -33,6 +33,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
@@ -61,7 +62,12 @@ fun HomeScreen(
     dropDirectoryLabel: String,
     onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = viewModel(
-        factory = HomeViewModel.factory(settingsRepository, rootfsRepository, prootContainerRepository),
+        factory = HomeViewModel.factory(
+            application = LocalContext.current.applicationContext as android.app.Application,
+            settingsRepository = settingsRepository,
+            rootfsRepository = rootfsRepository,
+            prootContainerRepository = prootContainerRepository,
+        ),
     ),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -136,10 +142,19 @@ fun HomeScreen(
                         swarmTasks = uiState.swarmTasks,
                         isExecuting = uiState.isExecuting,
                         isApiConfigured = uiState.isApiConfigured,
+                        awaitingApproval = uiState.awaitingApproval,
+                        pendingPlan = uiState.pendingPlan,
                         composerBottomPadding = if (showChatComposer) composerBottomPadding + 8.dp else 0.dp,
                         onQuickPrompt = viewModel::onQuickPrompt,
+                        onUpdateSwarmTask = viewModel::onUpdateSwarmTask,
+                        onApprovePlan = viewModel::onApprovePlan,
+                        onRejectPlan = viewModel::onRejectPlan,
                     )
-                    CoworkTab.Agents -> AgentsTabContent(isExecuting = uiState.isExecuting)
+                    CoworkTab.Agents -> AgentsTabContent(
+                        agentStates = uiState.agentStates,
+                        isExecuting = uiState.isExecuting,
+                        maxAgentPool = uiState.maxAgentPool,
+                    )
                     CoworkTab.Skills -> SkillsTabContent(skillsDirLabel = settingsRepository.getSkillsDir().absolutePath)
                     CoworkTab.Schedule -> ScheduleTabContent(onScheduleDraft = viewModel::onScheduleDraft)
                     CoworkTab.Files -> FilesTabContent(
@@ -161,6 +176,7 @@ fun HomeScreen(
                     onStop = viewModel::onStop,
                     isExecuting = uiState.isExecuting,
                     isApiConfigured = uiState.isApiConfigured,
+                    awaitingApproval = uiState.awaitingApproval,
                     executionMode = uiState.executionMode,
                     onModeChange = viewModel::onModeChange,
                     onFocusChange = { },

@@ -34,6 +34,10 @@ import com.proot.cowork.R
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.MessageRole
 import com.proot.cowork.domain.agent.SwarmTask
+import com.proot.cowork.domain.agent.TaskPlan
+import com.proot.cowork.ui.agent.EditableSwarmTaskTree
+import com.proot.cowork.ui.agent.SwarmApprovalCard
+import com.proot.cowork.ui.agent.ToolMessageBubble
 import com.proot.cowork.ui.design.CoworkTokens
 
 private val QUICK_PROMPTS = listOf(
@@ -49,14 +53,20 @@ fun ChatTabContent(
     swarmTasks: List<SwarmTask>,
     isExecuting: Boolean,
     isApiConfigured: Boolean,
+    awaitingApproval: Boolean,
+    pendingPlan: TaskPlan?,
     composerBottomPadding: androidx.compose.ui.unit.Dp,
     onQuickPrompt: (String) -> Unit,
+    onUpdateSwarmTask: (String, String) -> Unit,
+    onApprovePlan: () -> Unit,
+    onRejectPlan: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(messages.size, isExecuting) {
-        if (messages.isNotEmpty() || isExecuting) {
-            listState.animateScrollToItem((if (isExecuting) messages.size else messages.lastIndex).coerceAtLeast(0))
+    LaunchedEffect(messages.size, isExecuting, awaitingApproval) {
+        if (messages.isNotEmpty() || isExecuting || awaitingApproval) {
+            val target = (messages.size + if (awaitingApproval) 1 else 0).coerceAtLeast(0)
+            listState.animateScrollToItem(target)
         }
     }
 
@@ -66,7 +76,7 @@ fun ChatTabContent(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = composerBottomPadding + 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (messages.isEmpty() && !isExecuting) {
+        if (messages.isEmpty() && !isExecuting && !awaitingApproval) {
             item(key = "hero") {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -125,32 +135,36 @@ fun ChatTabContent(
                 }
             }
         }
-        if (swarmTasks.isNotEmpty()) {
-            item(key = "swarm") {
+
+        if (awaitingApproval && pendingPlan != null) {
+            item(key = "approval") {
+                SwarmApprovalCard(
+                    plan = pendingPlan,
+                    tasks = swarmTasks,
+                    onUpdateTask = onUpdateSwarmTask,
+                    onApprove = onApprovePlan,
+                    onReject = onRejectPlan,
+                )
+            }
+        } else if (swarmTasks.isNotEmpty() && isExecuting) {
+            item(key = "swarm-progress") {
                 Surface(shape = CoworkTokens.ShapeCard, color = CoworkTokens.Mint.copy(alpha = 0.08f), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Text(stringResource(R.string.swarm_plan_title), color = CoworkTokens.Mint, fontWeight = FontWeight.SemiBold)
-                        swarmTasks.forEach { Text("• ${it.title}", color = CoworkTokens.TextSecondary, style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
+                        Spacer(Modifier.size(8.dp))
+                        EditableSwarmTaskTree(tasks = swarmTasks, editable = false, onUpdateTask = { _, _ -> })
                     }
                 }
             }
         }
+
         items(messages, key = { it.id }) { msg ->
-            val isUser = msg.role == MessageRole.USER
-            Box(Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
-                Surface(
-                    modifier = Modifier.widthIn(max = 300.dp),
-                    shape = RoundedCornerShape(18.dp, 18.dp, if (isUser) 18.dp else 6.dp, if (isUser) 6.dp else 18.dp),
-                    color = when (msg.role) {
-                        MessageRole.USER -> CoworkTokens.Mint.copy(alpha = 0.16f)
-                        MessageRole.SYSTEM -> CoworkTokens.SurfaceElevated
-                        else -> CoworkTokens.Surface
-                    },
-                ) {
-                    Text(msg.content, Modifier.padding(14.dp, 10.dp), color = CoworkTokens.TextPrimary)
-                }
+            when (msg.role) {
+                MessageRole.TOOL -> ToolMessageBubble(msg, Modifier.fillMaxWidth())
+                else -> ChatMessageBubble(msg)
             }
         }
+
         if (isExecuting) {
             item(key = "typing") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -160,6 +174,24 @@ fun ChatTabContent(
                     Text(stringResource(R.string.agent_working), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ChatMessageBubble(msg: AgentMessage) {
+    val isUser = msg.role == MessageRole.USER
+    Box(Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
+        Surface(
+            modifier = Modifier.widthIn(max = 300.dp),
+            shape = RoundedCornerShape(18.dp, 18.dp, if (isUser) 18.dp else 6.dp, if (isUser) 6.dp else 18.dp),
+            color = when (msg.role) {
+                MessageRole.USER -> CoworkTokens.Mint.copy(alpha = 0.16f)
+                MessageRole.SYSTEM -> CoworkTokens.SurfaceElevated
+                else -> CoworkTokens.Surface
+            },
+        ) {
+            Text(msg.content, Modifier.padding(14.dp, 10.dp), color = CoworkTokens.TextPrimary)
         }
     }
 }

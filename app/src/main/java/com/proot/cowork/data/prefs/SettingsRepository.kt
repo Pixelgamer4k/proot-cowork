@@ -11,6 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import com.proot.cowork.userland.UserlandConfig
 import com.proot.cowork.userland.UserlandMigration
@@ -61,6 +62,8 @@ class SettingsRepository(private val context: Context) {
             model = prefs[Keys.MODEL] ?: "openrouter/owl-alpha",
         )
     }
+
+    suspend fun getLlmConfigSnapshot(): LlmConfig = llmConfig.first()
 
     val rootfsState: Flow<RootfsState> = context.dataStore.data.map { prefs ->
         RootfsState(

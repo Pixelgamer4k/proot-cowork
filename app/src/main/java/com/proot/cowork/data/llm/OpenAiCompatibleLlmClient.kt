@@ -13,11 +13,23 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+data class LlmToolCall(
+    val id: String,
+    val name: String,
+    val arguments: String,
+)
+
+data class LlmCompletionResult(
+    val content: String,
+    val toolCalls: List<LlmToolCall>,
+    val finishReason: String?,
+)
+
 object OpenAiCompatibleLlmClient {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
@@ -91,6 +103,114 @@ object OpenAiCompatibleLlmClient {
         buffer.toString()
     }
 
+    suspend fun complete(
+        config: LlmConfig,
+        messages: JSONArray,
+        tools: JSONArray? = null,
+        temperature: Double = 0.4,
+        maxTokens: Int = 4096,
+    ): LlmCompletionResult = withContext(Dispatchers.IO) {
+        val endpoint = LlmEndpoint.from(config)
+        val payload = JSONObject().apply {
+            put("model", config.model.trim())
+            put("stream", false)
+            put("temperature", temperature)
+            put("max_tokens", maxTokens)
+            put("messages", messages)
+            if (tools != null && tools.length() > 0) {
+                put("tools", tools)
+                put("tool_choice", "auto")
+            }
+        }
+        val request = buildRequest(endpoint, config.apiKey, payload.toString())
+        http.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                error("HTTP ${response.code}: ${body.take(400)}")
+            }
+            parseCompletion(JSONObject(body))
+        }
+    }
+
+    fun buildMessagesArray(
+        systemPrompt: String,
+        history: List<AgentMessage>,
+        userMessage: String? = null,
+    ): JSONArray {
+        val messages = JSONArray()
+        messages.put(JSONObject().put("role", "system").put("content", systemPrompt))
+        history.takeLast(24).forEach { msg -> appendMessage(messages, msg) }
+        if (!userMessage.isNullOrBlank()) {
+            messages.put(JSONObject().put("role", "user").put("content", userMessage))
+        }
+        return messages
+    }
+
+    fun appendMessage(messages: JSONArray, msg: AgentMessage) {
+        when (msg.role) {
+            MessageRole.USER -> {
+                if (msg.content.isNotBlank()) {
+                    messages.put(JSONObject().put("role", "user").put("content", msg.content))
+                }
+            }
+            MessageRole.ASSISTANT -> {
+                if (msg.content.isNotBlank()) {
+                    messages.put(JSONObject().put("role", "assistant").put("content", msg.content))
+                }
+            }
+            MessageRole.SYSTEM -> {
+                if (msg.content.isNotBlank()) {
+                    messages.put(JSONObject().put("role", "system").put("content", msg.content))
+                }
+            }
+            MessageRole.TOOL -> {
+                if (msg.toolCallId != null && msg.content.isNotBlank()) {
+                    messages.put(
+                        JSONObject()
+                            .put("role", "tool")
+                            .put("tool_call_id", msg.toolCallId)
+                            .put("content", msg.content),
+                    )
+                }
+            }
+        }
+    }
+
+    fun assistantToolCallMessage(toolCalls: List<LlmToolCall>): JSONObject {
+        val msg = JSONObject().put("role", "assistant")
+        val calls = JSONArray()
+        toolCalls.forEach { call ->
+            calls.put(
+                JSONObject()
+                    .put("id", call.id)
+                    .put("type", "function")
+                    .put("function", JSONObject().put("name", call.name).put("arguments", call.arguments)),
+            )
+        }
+        msg.put("tool_calls", calls)
+        return msg
+    }
+
+    private fun parseCompletion(json: JSONObject): LlmCompletionResult {
+        val choice = json.optJSONArray("choices")?.optJSONObject(0)
+            ?: return LlmCompletionResult("", emptyList(), null)
+        val message = choice.optJSONObject("message") ?: JSONObject()
+        val content = message.optString("content").orEmpty()
+        val finish = choice.optString("finish_reason").ifBlank { null }
+        val toolCalls = message.optJSONArray("tool_calls")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                val tc = arr.optJSONObject(i) ?: return@mapNotNull null
+                val fn = tc.optJSONObject("function") ?: return@mapNotNull null
+                LlmToolCall(
+                    id = tc.optString("id", "call_$i"),
+                    name = fn.optString("name"),
+                    arguments = fn.optString("arguments", "{}"),
+                )
+            }
+        }.orEmpty()
+        return LlmCompletionResult(content, toolCalls, finish)
+    }
+
     private fun buildRequest(endpoint: ResolvedLlmEndpoint, apiKey: String, payload: String): Request {
         return Request.Builder()
             .url(endpoint.chatCompletionsUrl)
@@ -100,27 +220,5 @@ object OpenAiCompatibleLlmClient {
             .addHeader("X-Title", "Proot Cowork")
             .post(payload.toRequestBody(jsonMediaType))
             .build()
-    }
-
-    private fun buildMessagesArray(
-        systemPrompt: String,
-        history: List<AgentMessage>,
-        userMessage: String,
-    ): JSONArray {
-        val messages = JSONArray()
-        messages.put(JSONObject().put("role", "system").put("content", systemPrompt))
-        history.takeLast(12).forEach { msg ->
-            val role = when (msg.role) {
-                MessageRole.USER -> "user"
-                MessageRole.ASSISTANT -> "assistant"
-                MessageRole.SYSTEM -> "system"
-                MessageRole.TOOL -> "assistant"
-            }
-            if (msg.content.isNotBlank()) {
-                messages.put(JSONObject().put("role", role).put("content", msg.content))
-            }
-        }
-        messages.put(JSONObject().put("role", "user").put("content", userMessage))
-        return messages
     }
 }

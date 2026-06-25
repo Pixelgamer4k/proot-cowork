@@ -25,8 +25,19 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Cache termux-x11 checkout
+        uses: actions/cache@v4
+        with:
+          path: third_party/termux-x11
+          key: termux-x11-phoshdroid-${{ hashFiles('scripts/setup-termux-stack.sh', 'scripts/patch-termux-x11-embed.sh') }}
+          restore-keys: |
+            termux-x11-phoshdroid-
+
       - name: Setup Termux stack (x11 + terminal modules)
         run: bash scripts/setup-termux-stack.sh
+        env:
+          TERMUX_STACK_CLONE_ATTEMPTS: 8
+          TERMUX_STACK_RETRY_DELAY_SEC: 60
 
       - name: Verify termux-x11 embed patches
         run: grep -q COWORK_TRIGGER_CALLBACK_NULL third_party/termux-x11/app/src/main/java/com/termux/x11/LorieView.java

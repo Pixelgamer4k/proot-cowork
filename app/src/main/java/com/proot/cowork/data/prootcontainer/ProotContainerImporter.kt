@@ -159,8 +159,27 @@ class ProotContainerImporter(private val context: Context) {
         )
 
         val distro = detectDistroName(partialDir) ?: ProotContainerValidator.DEFAULT_DISTRO
-        val installError = installExtractedLayout(partialDir, distro)
+        val installError = try {
+            installExtractedLayout(partialDir, distro) { detail ->
+                onProgress(
+                    ImportProgressUpdate(
+                        phase = ImportPhase.INSTALLING,
+                        progress = 0.92f,
+                        detail = detail,
+                    ),
+                )
+            }
+        } catch (e: OutOfMemoryError) {
+            cleanupInstallTarget(distro)
+            partialDir.deleteRecursively()
+            return ImportResult.Error("Out of memory while installing. Free storage and try again.")
+        } catch (e: Exception) {
+            cleanupInstallTarget(distro)
+            partialDir.deleteRecursively()
+            return ImportResult.Error(e.message ?: "Install failed")
+        }
         if (installError != null) {
+            cleanupInstallTarget(distro)
             partialDir.deleteRecursively()
             return ImportResult.Error(installError)
         }
@@ -201,28 +220,40 @@ class ProotContainerImporter(private val context: Context) {
         return null
     }
 
-    private fun installExtractedLayout(partialDir: File, defaultDistro: String): String? {
+    private fun installExtractedLayout(
+        partialDir: File,
+        defaultDistro: String,
+        onDetail: (String) -> Unit = {},
+    ): String? {
         val prefix = TermuxLayout.prefixDir(context)
         val runtimeDir = File(prefix, "var/lib/proot-distro").also { it.mkdirs() }
 
         val packaged = detectDistroName(partialDir)?.let { File(partialDir, it) }
         val dest = File(runtimeDir, "containers/$defaultDistro")
+        dest.parentFile?.mkdirs()
 
-        when {
-            packaged != null -> {
-                if (dest.exists()) dest.deleteRecursively()
-                moveDirectoryPreservingSymlinks(packaged, dest)
-            }
-            File(partialDir, "usr/bin/bash").isFile -> {
-                if (dest.exists()) dest.deleteRecursively()
-                val rootfs = File(dest, "rootfs").also { it.mkdirs() }
-                partialDir.listFiles()?.forEach { entry ->
-                    val target = File(rootfs, entry.name)
-                    moveEntryPreservingSymlinks(entry, target)
+        try {
+            when {
+                packaged != null -> {
+                    if (dest.exists()) dest.deleteRecursively()
+                    onDetail("Moving Ubuntu container…")
+                    moveDirectoryPreservingSymlinks(packaged, dest)
                 }
-                writeDefaultManifest(dest)
+                File(partialDir, "usr/bin/bash").isFile -> {
+                    if (dest.exists()) dest.deleteRecursively()
+                    val rootfs = File(dest, "rootfs").also { it.mkdirs() }
+                    onDetail("Moving rootfs…")
+                    partialDir.listFiles()?.forEach { entry ->
+                        val target = File(rootfs, entry.name)
+                        moveEntryPreservingSymlinks(entry, target)
+                    }
+                    writeDefaultManifest(dest)
+                }
+                else -> return "Invalid archive: expected ubuntu/rootfs/ layout"
             }
-            else -> return "Invalid archive: expected ubuntu/rootfs/ layout"
+        } catch (e: Exception) {
+            cleanupInstallTarget(defaultDistro)
+            throw e
         }
 
         ProotContainerSysdata.installIfNeeded(context, dest)
@@ -246,7 +277,15 @@ class ProotContainerImporter(private val context: Context) {
         }
     }
 
+    private fun cleanupInstallTarget(distro: String) {
+        try {
+            ProotContainerValidator.containerDir(context, distro).deleteRecursively()
+        } catch (_: Exception) {
+        }
+    }
+
     private fun moveEntryPreservingSymlinks(source: File, dest: File) {
+        dest.parentFile?.mkdirs()
         if (source.renameTo(dest)) return
         if (source.isDirectory) {
             moveDirectoryPreservingSymlinks(source, dest)
@@ -257,26 +296,16 @@ class ProotContainerImporter(private val context: Context) {
     }
 
     private fun moveDirectoryPreservingSymlinks(source: File, dest: File) {
+        dest.parentFile?.mkdirs()
         if (source.renameTo(dest)) return
-        copyDirectoryPreservingSymlinks(source, dest)
-        source.deleteRecursively()
-    }
-
-    private fun copyDirectoryPreservingSymlinks(source: File, dest: File) {
         if (!dest.exists() && !dest.mkdirs()) {
             throw IllegalStateException("Failed to create $dest")
         }
-        source.listFiles()?.forEach { entry ->
-            val target = File(dest, entry.name)
-            when {
-                Files.isSymbolicLink(entry.toPath()) -> {
-                    if (target.exists()) target.delete()
-                    Files.createSymbolicLink(target.toPath(), Files.readSymbolicLink(entry.toPath()))
-                }
-                entry.isDirectory -> copyDirectoryPreservingSymlinks(entry, target)
-                else -> entry.copyTo(target, overwrite = true)
-            }
+        val children = source.listFiles() ?: emptyArray()
+        for (child in children) {
+            moveEntryPreservingSymlinks(child, File(dest, child.name))
         }
+        source.delete()
     }
 
     private fun copyFilePreservingSymlinks(source: File, dest: File) {

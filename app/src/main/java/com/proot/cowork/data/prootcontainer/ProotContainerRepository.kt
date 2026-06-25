@@ -2,6 +2,7 @@ package com.proot.cowork.data.prootcontainer
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.rootfs.ImportResult
 import com.proot.cowork.domain.desktop.StackFrontLayer
@@ -24,33 +25,50 @@ class ProotContainerRepository(
     private val importer = ProotContainerImporter(context)
 
     suspend fun repairStateOnStartup() = withContext(Dispatchers.IO) {
+        try {
+            recoverFilesystemState()
+            if (ProotContainerValidator.isInstalled(context)) {
+                settingsRepository.ensureRootfsInstalledIfPresent(
+                    ProotContainerValidator.rootfsDir(context),
+                )
+                ProotContainerSysdata.installIfNeeded(context)
+                when {
+                    ProotXfceLauncher.isRunning() -> {
+                        DesktopSession.setState(DesktopState.RUNNING)
+                        TermuxStackSession.setFrontLayer(StackFrontLayer.X11)
+                    }
+                    DesktopSession.state.value == DesktopState.STOPPED -> {
+                        // User powered off — do not auto-restart on resume.
+                    }
+                    else -> startDesktopIfPossible()
+                }
+            } else {
+                settingsRepository.clearRootfsInstalled()
+                DesktopSession.setState(DesktopState.NO_ROOTFS)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "repairStateOnStartup failed; resetting container state", e)
+            recoverFilesystemState(force = true)
+            settingsRepository.clearImportingState()
+            ImportSession.reset()
+            settingsRepository.clearRootfsInstalled()
+            DesktopSession.setState(DesktopState.NO_ROOTFS)
+        }
+    }
+
+    private suspend fun recoverFilesystemState(force: Boolean = false) {
         val partial = getPartialDir()
-        partial.deleteRecursively()
+        if (partial.exists()) {
+            partial.deleteRecursively()
+        }
         settingsRepository.clearImportingState()
         ImportSession.reset()
 
-        if (ProotContainerValidator.isInstalled(context)) {
-            settingsRepository.ensureRootfsInstalledIfPresent(
-                ProotContainerValidator.rootfsDir(context),
-            )
-            ProotContainerSysdata.installIfNeeded(context)
-            when {
-                ProotXfceLauncher.isRunning() -> {
-                    DesktopSession.setState(DesktopState.RUNNING)
-                    TermuxStackSession.setFrontLayer(StackFrontLayer.X11)
-                }
-                DesktopSession.state.value == DesktopState.STOPPED -> {
-                    // User powered off — do not auto-restart on resume.
-                }
-                else -> startDesktopIfPossible()
-            }
-        } else {
+        if (force || !ProotContainerValidator.isInstalled(context)) {
             val containerDir = ProotContainerValidator.containerDir(context)
             if (containerDir.exists()) {
                 containerDir.deleteRecursively()
             }
-            settingsRepository.clearRootfsInstalled()
-            DesktopSession.setState(DesktopState.NO_ROOTFS)
         }
     }
 
@@ -132,8 +150,11 @@ class ProotContainerRepository(
             extract(partialDir) { update ->
                 ImportSession.update(update.phase, update.progress, update.detail)
             }
+        } catch (e: OutOfMemoryError) {
+            recoverFilesystemState(force = true)
+            ImportResult.Error("Out of memory while importing. Free storage and try again.")
         } catch (e: Exception) {
-            partialDir.deleteRecursively()
+            recoverFilesystemState(force = true)
             ImportResult.Error(e.message ?: "Import failed")
         }
 
@@ -153,7 +174,7 @@ class ProotContainerRepository(
                 }
             }
             is ImportResult.Error -> {
-                partialDir.deleteRecursively()
+                recoverFilesystemState(force = true)
                 ImportSession.reset()
                 settingsRepository.clearImportingState()
                 DesktopSession.setState(DesktopState.NO_ROOTFS)
@@ -164,4 +185,8 @@ class ProotContainerRepository(
     }
 
     private fun getPartialDir(): File = context.filesDir.resolve("proot-container.partial")
+
+    companion object {
+        private const val TAG = "ProotContainerRepo"
+    }
 }

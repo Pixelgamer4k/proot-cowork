@@ -37,7 +37,13 @@ class ProotCoworkApp : Application() {
         DebugStatusWriter.init(this)
         createNotificationChannels()
         appScope.launch {
-            if (!TERMUX_STACK_DESKTOP) {
+            if (TERMUX_STACK_DESKTOP) {
+                try {
+                    prootContainerRepository.repairStateOnStartup()
+                } catch (e: Exception) {
+                    android.util.Log.e("ProotCoworkApp", "early container repair failed", e)
+                }
+            } else {
                 rootfsRepository.repairStateOnStartup()
             }
         }

@@ -23,9 +23,12 @@ import com.proot.cowork.ui.theme.ProotCoworkTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private val bootstrapMutex = Mutex()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -92,11 +95,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun runBootstrapAndRepair() {
-        val app = application as ProotCoworkApp
-        withContext(Dispatchers.IO) {
-            TermuxBootstrap.ensureInstalled(applicationContext)
+        bootstrapMutex.withLock {
+            val app = application as ProotCoworkApp
+            withContext(Dispatchers.IO) {
+                TermuxBootstrap.ensureInstalled(applicationContext)
+            }
+            app.prootContainerRepository.repairStateOnStartup()
         }
-        app.prootContainerRepository.repairStateOnStartup()
     }
 
     private fun requestTermuxStorageAccess() {

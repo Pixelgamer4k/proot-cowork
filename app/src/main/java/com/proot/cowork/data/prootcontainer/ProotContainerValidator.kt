@@ -16,8 +16,15 @@ object ProotContainerValidator {
 
     fun isInstalled(context: Context, distro: String = DEFAULT_DISTRO): Boolean {
         val rootfs = rootfsDir(context, distro)
-        return File(rootfs, "usr/bin/bash").isFile &&
-            (File(rootfs, "usr/bin/xfce4-session").isFile ||
-                File(rootfs, "usr/bin/startxfce4").isFile)
+        if (!File(rootfs, "usr/bin/bash").isFile) return false
+        if (!File(rootfs, "usr/bin/xfce4-session").isFile &&
+            !File(rootfs, "usr/bin/startxfce4").isFile
+        ) {
+            return false
+        }
+        // Reject partial imports that copied only early paths before a crash.
+        if (!File(rootfs, "etc/os-release").isFile) return false
+        if (!File(rootfs, "usr/lib").isDirectory) return false
+        return true
     }
 }

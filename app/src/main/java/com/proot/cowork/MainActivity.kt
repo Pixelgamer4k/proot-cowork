@@ -2,16 +2,11 @@ package com.proot.cowork
 
 import android.os.Build
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.lifecycleScope
-import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.prootcontainer.ProotContainerTarballLocator
 import com.proot.cowork.data.rootfs.RootfsTarballLocator
 import com.proot.cowork.data.vnc.VncPortProbe
@@ -19,6 +14,7 @@ import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import android.provider.Settings
+import android.net.Uri
 import com.proot.cowork.service.TermuxStackService
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
 import com.proot.cowork.termux.bootstrap.TermuxStorageSetup
@@ -35,60 +31,19 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val app = application as ProotCoworkApp
 
+        val dropLabel = if (TERMUX_STACK_DESKTOP) {
+            ProotContainerTarballLocator.dropDirectoryLabel(this)
+        } else {
+            RootfsTarballLocator.dropDirectoryLabel(this)
+        }
+
         setContent {
-            val scope = rememberCoroutineScope()
-            val importLauncher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.OpenDocument(),
-            ) { uri: Uri? ->
-                if (uri != null) {
-                    scope.launch {
-                        try {
-                            contentResolver.takePersistableUriPermission(
-                                uri,
-                                Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                            )
-                        } catch (_: SecurityException) {
-                            // OpenDocument grants session access; persistable is optional.
-                        }
-                        if (TERMUX_STACK_DESKTOP) {
-                            app.prootContainerRepository.importFromUri(uri)
-                        } else {
-                            app.rootfsRepository.importFromUri(uri)
-                        }
-                    }
-                }
-            }
-
-            val dropLabel = if (TERMUX_STACK_DESKTOP) {
-                ProotContainerTarballLocator.dropDirectoryLabel(this)
-            } else {
-                RootfsTarballLocator.dropDirectoryLabel(this)
-            }
-
             ProotCoworkTheme {
                 ProotCoworkApp(
                     settingsRepository = app.settingsRepository,
                     rootfsRepository = app.rootfsRepository,
                     prootContainerRepository = app.prootContainerRepository,
                     dropDirectoryLabel = dropLabel,
-                    onImportDroppedFile = {
-                        scope.launch {
-                            if (TERMUX_STACK_DESKTOP) {
-                                app.prootContainerRepository.importAutoDiscover()
-                            } else {
-                                app.rootfsRepository.importAutoDiscover()
-                            }
-                        }
-                    },
-                    onImportChooseFile = {
-                        importLauncher.launch(
-                            arrayOf(
-                                "application/gzip",
-                                "application/x-gzip",
-                                "application/octet-stream",
-                            ),
-                        )
-                    },
                 )
             }
         }

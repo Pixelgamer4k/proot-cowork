@@ -104,11 +104,22 @@ class ProotContainerRepository(
         startDesktopIfPossible(distro)
     }
 
+    suspend fun waitForBootstrap(timeoutMs: Long = 120_000L): Boolean = withContext(Dispatchers.IO) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (TermuxBootstrap.ensureInstalled(context)) return@withContext true
+            kotlinx.coroutines.delay(400)
+        }
+        TermuxBootstrap.ensureInstalled(context)
+    }
+
     private suspend fun importContainer(
         extract: suspend (partialDir: File, onProgress: suspend (ImportProgressUpdate) -> Unit) -> ImportResult,
     ): ImportResult = withContext(Dispatchers.IO) {
-        if (!TermuxBootstrap.ensureInstalled(context)) {
-            return@withContext ImportResult.Error("Termux bootstrap not ready — wait a moment and retry")
+        if (!waitForBootstrap()) {
+            return@withContext ImportResult.Error(
+                "Termux is still starting. Wait a few seconds and try again.",
+            )
         }
 
         stopDesktop()

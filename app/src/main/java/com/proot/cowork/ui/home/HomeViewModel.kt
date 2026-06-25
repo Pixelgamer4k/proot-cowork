@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
+import com.proot.cowork.data.rootfs.ImportResult
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.ExecutionMode
@@ -36,6 +37,8 @@ data class HomeUiState(
     val executionMode: ExecutionMode = ExecutionMode.PLAN,
     val inputText: String = "",
     val isExecuting: Boolean = false,
+    val importError: String? = null,
+    val isImportBusy: Boolean = false,
 )
 
 class HomeViewModel(
@@ -74,9 +77,47 @@ class HomeViewModel(
         import.active && import.phase != ImportPhase.STARTING_DESKTOP -> DesktopState.IMPORTING
         legacyImporting -> DesktopState.IMPORTING
         import.active && import.phase == ImportPhase.STARTING_DESKTOP -> DesktopState.STARTING
-        !installed && !import.active -> DesktopState.NO_ROOTFS
+        !installed -> DesktopState.NO_ROOTFS
         desktop == DesktopState.STARTING -> DesktopState.STARTING
         else -> desktop
+    }
+
+    fun clearImportError() {
+        localState.update { it.copy(importError = null) }
+    }
+
+    fun importFromUri(uri: Uri) {
+        if (localState.value.isImportBusy) return
+        viewModelScope.launch {
+            localState.update { it.copy(isImportBusy = true, importError = null) }
+            val result = if (TERMUX_STACK_DESKTOP) {
+                prootContainerRepository.importFromUri(uri)
+            } else {
+                rootfsRepository.importFromUri(uri)
+            }
+            handleImportResult(result)
+        }
+    }
+
+    fun importAutoDiscover() {
+        if (localState.value.isImportBusy) return
+        viewModelScope.launch {
+            localState.update { it.copy(isImportBusy = true, importError = null) }
+            val result = if (TERMUX_STACK_DESKTOP) {
+                prootContainerRepository.importAutoDiscover()
+            } else {
+                rootfsRepository.importAutoDiscover()
+            }
+            handleImportResult(result)
+        }
+    }
+
+    private fun handleImportResult(result: ImportResult) {
+        localState.update { it.copy(isImportBusy = false) }
+        if (result is ImportResult.Error) {
+            localState.update { it.copy(importError = result.message) }
+            DesktopSession.appendLog(result.message)
+        }
     }
 
     fun onPowerOff() {

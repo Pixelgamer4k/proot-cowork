@@ -4,6 +4,7 @@
     <string name="add_rootfs">Add your rootfs</string>
     <string name="add_rootfs_hint">Drop %2$s into:\n%1$s\n\nOr choose any file with the picker.</string>
     <string name="import_dropped_file">Import dropped file</string>
+    <string name="import_ubuntu_desktop">Import Ubuntu desktop</string>
     <string name="import_choose_file">Choose file…</string>
     <string name="desktop_placeholder">Linux desktop will appear here</string>
     <string name="settings">Settings</string>

@@ -21,6 +21,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -52,14 +55,18 @@ fun DesktopPanel(
     distroName: String,
     desktopLogHint: String? = null,
     dropDirectoryLabel: String,
+    importError: String? = null,
+    isImportBusy: Boolean = false,
+    onImportPrimary: () -> Unit,
     onImportDroppedFile: () -> Unit,
-    onImportChooseFile: () -> Unit,
     onPowerOff: () -> Unit,
     onReboot: () -> Unit,
     onScreenshot: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+    val useWideLayout = desktopState == DesktopState.RUNNING || desktopState == DesktopState.STARTING
+
+    Column(modifier = modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -89,8 +96,15 @@ fun DesktopPanel(
 
         Box(
             modifier = Modifier
+                .weight(1f)
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f)
+                .then(
+                    if (useWideLayout) {
+                        Modifier.aspectRatio(16f / 9f)
+                    } else {
+                        Modifier.fillMaxSize()
+                    },
+                )
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
@@ -100,8 +114,10 @@ fun DesktopPanel(
                 when (desktopState) {
                     DesktopState.NO_ROOTFS -> NoProotContainerContent(
                         dropDirectoryLabel = dropDirectoryLabel,
+                        importError = importError,
+                        isImportBusy = isImportBusy,
+                        onImportPrimary = onImportPrimary,
                         onImportDroppedFile = onImportDroppedFile,
-                        onImportChooseFile = onImportChooseFile,
                     )
                     DesktopState.IMPORTING -> ImportingContent(importUiState)
                     DesktopState.STOPPED -> StoppedContent(onReboot, desktopLogHint)
@@ -113,8 +129,10 @@ fun DesktopPanel(
             } else when (desktopState) {
                 DesktopState.NO_ROOTFS -> NoRootfsContent(
                     dropDirectoryLabel = dropDirectoryLabel,
+                    importError = importError,
+                    isImportBusy = isImportBusy,
+                    onImportPrimary = onImportPrimary,
                     onImportDroppedFile = onImportDroppedFile,
-                    onImportChooseFile = onImportChooseFile,
                 )
                 DesktopState.IMPORTING -> ImportingContent(importUiState)
                 DesktopState.STARTING -> VncDesktopWithOverlay("Booting XFCE over VNC…")
@@ -183,17 +201,23 @@ private fun VncDesktopWithOverlay(message: String) {
 @Composable
 private fun NoProotContainerContent(
     dropDirectoryLabel: String,
+    importError: String?,
+    isImportBusy: Boolean,
+    onImportPrimary: () -> Unit,
     onImportDroppedFile: () -> Unit,
-    onImportChooseFile: () -> Unit,
 ) {
+    val scroll = rememberScrollState()
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier.padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scroll)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(72.dp)
+                .size(64.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center,
@@ -201,14 +225,15 @@ private fun NoProotContainerContent(
             Icon(
                 Icons.Default.Add,
                 contentDescription = null,
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = stringResource(R.string.add_proot_container),
             style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -221,12 +246,37 @@ private fun NoProotContainerContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(modifier = Modifier.height(20.dp))
-        FilledTonalButton(onClick = onImportChooseFile, modifier = Modifier.fillMaxWidth(0.85f)) {
-            Text(stringResource(R.string.import_choose_file))
+        if (!importError.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = importError,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = onImportPrimary,
+            enabled = !isImportBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (isImportBusy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+            }
+            Text(stringResource(R.string.import_ubuntu_desktop))
         }
         Spacer(modifier = Modifier.height(8.dp))
-        FilledTonalButton(onClick = onImportDroppedFile, modifier = Modifier.fillMaxWidth(0.85f)) {
+        FilledTonalButton(
+            onClick = onImportDroppedFile,
+            enabled = !isImportBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Text(stringResource(R.string.import_dropped_file))
         }
     }
@@ -235,29 +285,18 @@ private fun NoProotContainerContent(
 @Composable
 private fun NoRootfsContent(
     dropDirectoryLabel: String,
+    importError: String?,
+    isImportBusy: Boolean,
+    onImportPrimary: () -> Unit,
     onImportDroppedFile: () -> Unit,
-    onImportChooseFile: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier.padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = null,
-                modifier = Modifier.size(36.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = stringResource(R.string.add_rootfs),
             style = MaterialTheme.typography.titleMedium,
@@ -273,13 +312,30 @@ private fun NoRootfsContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(modifier = Modifier.height(20.dp))
-        FilledTonalButton(onClick = onImportDroppedFile) {
-            Text(stringResource(R.string.import_dropped_file))
+        if (!importError.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = importError,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = onImportPrimary,
+            enabled = !isImportBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.import_choose_file))
         }
         Spacer(modifier = Modifier.height(8.dp))
-        FilledTonalButton(onClick = onImportChooseFile) {
-            Text(stringResource(R.string.import_choose_file))
+        FilledTonalButton(
+            onClick = onImportDroppedFile,
+            enabled = !isImportBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.import_dropped_file))
         }
     }
 }

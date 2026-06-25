@@ -23,8 +23,7 @@ fun ProotCoworkApp(
     rootfsRepository: RootfsRepository,
     prootContainerRepository: ProotContainerRepository,
     dropDirectoryLabel: String,
-    onImportDroppedFile: () -> Unit,
-    onImportChooseFile: () -> Unit,
+    onNavigateToSettings: () -> Unit = {},
 ) {
     val navController = rememberNavController()
 
@@ -39,8 +38,6 @@ fun ProotCoworkApp(
                 rootfsRepository = rootfsRepository,
                 prootContainerRepository = prootContainerRepository,
                 dropDirectoryLabel = dropDirectoryLabel,
-                onImportDroppedFile = onImportDroppedFile,
-                onImportChooseFile = onImportChooseFile,
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }

@@ -50,22 +50,32 @@ echo "==> [cowork] Installing Firefox (Mozilla aarch64, non-snap)"
 FIREFOX_DIR="/opt/firefox"
 if [[ ! -x "$FIREFOX_DIR/firefox" ]]; then
   tmp="$(mktemp -d)"
-  curl -fsSL \
-    "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64-aarch64&lang=en-US" \
-    -o "$tmp/firefox.tar.xz"
+  for attempt in 1 2 3; do
+    if curl -fsSL \
+      "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64-aarch64&lang=en-US" \
+      -o "$tmp/firefox.tar.xz"; then
+      break
+    fi
+    echo "firefox download attempt $attempt failed; retrying..." >&2
+    sleep 5
+  done
   rm -rf "$FIREFOX_DIR"
   mkdir -p "$FIREFOX_DIR"
   tar -xJf "$tmp/firefox.tar.xz" -C "$FIREFOX_DIR" --strip-components=1
   rm -rf "$tmp"
 fi
 rm -f /usr/bin/firefox /usr/local/bin/firefox 2>/dev/null || true
-ln -sf "$FIREFOX_DIR/firefox" /usr/local/bin/firefox
-update-alternatives --install /usr/bin/firefox firefox /usr/local/bin/firefox 100 2>/dev/null || true
+if [[ -x "$FIREFOX_DIR/firefox" ]]; then
+  ln -sf "$FIREFOX_DIR/firefox" /usr/local/bin/firefox
+  update-alternatives --install /usr/bin/firefox firefox /usr/local/bin/firefox 100 2>/dev/null || true
+else
+  echo "WARNING: Firefox install failed; falkon remains as browser" >&2
+fi
 
-echo "==> [cowork] Python automation stack"
-pip3 install --break-system-packages --no-cache-dir \
-  pytesseract pillow numpy opencv-python-headless pyautogui 2>/dev/null \
-  || pip3 install --no-cache-dir pytesseract pillow numpy opencv-python-headless pyautogui || true
+echo "==> [cowork] Python automation stack (pytesseract only; xdotool from apt)"
+pip3 install --break-system-packages --no-cache-dir pytesseract 2>/dev/null \
+  || pip3 install --no-cache-dir pytesseract 2>/dev/null \
+  || true
 
 COWORK_ROOT="${COWORK_ROOT:-/opt/cowork}"
 mkdir -p "$COWORK_ROOT/bin" "$COWORK_ROOT/computer-use"
@@ -94,6 +104,7 @@ apt-get clean
 rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 2>/dev/null || true
 
 echo "==> [cowork] Layer complete (automation only)"
-command -v firefox >/dev/null && firefox --version | head -1 || true
+command -v firefox >/dev/null && firefox --version 2>/dev/null | head -1 || true
+command -v falkon >/dev/null && echo "    falkon: $(command -v falkon)"
 command -v cowork-agent >/dev/null && echo "    cowork-agent: $(command -v cowork-agent)"
 test -f "$COWORK_ROOT/computer-use/cowork_desktop.py" && echo "    computer-use: OK"

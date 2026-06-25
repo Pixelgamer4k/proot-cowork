@@ -40,7 +40,7 @@ jobs:
           tar -tzf "$ARCHIVE" | head -20
           echo "total entries: $(tar -tzf "$ARCHIVE" | wc -l)"
           tar -tzf "$ARCHIVE" | grep -q 'ubuntu/rootfs/opt/cowork/computer-use/cowork_desktop.py'
-          tar -tzf "$ARCHIVE" | grep -qE 'ubuntu/rootfs/opt/firefox/firefox|ubuntu/rootfs/usr/local/bin/firefox'
+          tar -tzf "$ARCHIVE" | grep -qE 'ubuntu/rootfs/opt/firefox/firefox|ubuntu/rootfs/usr/local/bin/firefox|ubuntu/rootfs/usr/bin/falkon'
           tar -tzf "$ARCHIVE" | grep -q 'ubuntu/rootfs/usr/bin/xdotool'
           tar -tzf "$ARCHIVE" | grep -q 'ubuntu/manifest.json'
           echo "cowork automation checks passed"

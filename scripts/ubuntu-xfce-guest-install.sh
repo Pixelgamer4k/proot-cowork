@@ -63,5 +63,5 @@ echo "==> Guest install complete"
 echo "    Packages: $(dpkg -l | grep -c ^ii || true)"
 test -f /out/usr/bin/xfce4-session || test -f /out/usr/bin/startxfce4
 test -f /out/opt/cowork/computer-use/cowork_desktop.py
-test -x /out/opt/firefox/firefox || test -x /out/usr/local/bin/firefox
+test -x /out/opt/firefox/firefox || test -x /out/usr/local/bin/firefox || test -x /out/usr/bin/falkon
 test -f /out/usr/bin/xdotool

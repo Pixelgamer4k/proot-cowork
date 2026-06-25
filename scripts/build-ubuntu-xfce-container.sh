@@ -52,7 +52,9 @@ echo "==> Verifying guest rootfs"
 test -f "$WORKDIR/ubuntu/rootfs/usr/bin/bash"
 test -f "$WORKDIR/ubuntu/rootfs/usr/bin/startxfce4" || test -f "$WORKDIR/ubuntu/rootfs/usr/bin/xfce4-session"
 test -f "$WORKDIR/ubuntu/rootfs/opt/cowork/computer-use/cowork_desktop.py"
-test -x "$WORKDIR/ubuntu/rootfs/usr/local/bin/firefox" || test -x "$WORKDIR/ubuntu/rootfs/opt/firefox/firefox"
+test -x "$WORKDIR/ubuntu/rootfs/opt/firefox/firefox" \
+  || test -x "$WORKDIR/ubuntu/rootfs/usr/local/bin/firefox" \
+  || test -x "$WORKDIR/ubuntu/rootfs/usr/bin/falkon"
 
 mkdir -p "$(dirname "$OUTPUT")"
 echo "==> Packing $(basename "$OUTPUT")"

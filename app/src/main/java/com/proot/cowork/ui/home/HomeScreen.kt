@@ -106,7 +106,6 @@ fun HomeScreen(
             DesktopPreviewCard(
                 desktopState = uiState.desktopState,
                 importUiState = uiState.importUiState,
-                selectedTab = selectedTab,
                 dropDirectoryLabel = dropDirectoryLabel,
                 importError = uiState.importError,
                 isImportBusy = uiState.isImportBusy,

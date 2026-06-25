@@ -30,9 +30,15 @@ Match the reference mocks exactly. Source images: `Cowork-image-references/img_*
 ## Layout shell (every tab)
 
 1. **Top bar** — hamburger | orange dot + `ubuntu` + teal status dot (center) | camera, refresh, power
-## Desktop preview (all tabs)
+2. **Desktop window** — 16:9 rounded frame, border, no title bar; state-based content or live X11
+3. **Tab body** — scrollable content below desktop
 
-When X11 is not live, render `DesktopReferenceMock`: blue gradient wallpaper, `+` grid, left shortcuts (File System / Home / Settings), centered mint agent tile, bottom dock. Title bar shows `Applications` and `N yyyy-MM-dd HH:mm`. Live X11 clips inside the same chrome when running.
+16:9 rounded frame with **no title bar or timestamps**. Content only:
+- **No container** — mint `+` import icon (tap to import)
+- **Importing** — minimal progress indicator
+- **Booting** — spinner + “Booting”
+- **Off** — “Off” when stopped
+- **Running** — live X11 clipped inside the frame
 3. **Tab body** — scrollable content below desktop
 4. **Tab-specific footer** — Chat: large composer; Terminal: `~ $ Enter command…` pill
 5. **Bottom nav** — 6 tabs; active = mint icon + label + 2dp mint bar above icon
@@ -42,7 +48,7 @@ When X11 is not live, render `DesktopReferenceMock`: blue gradient wallpaper, `+
 - Hero: 56dp rounded-square mint tint, robot icon, **Cowork agents ready**, hint text
 - Quick chips: dark pills `#1C1C1F`, 20dp radius, muted text
 - Composer: **large** box ~min 110dp, 24dp radius, placeholder **Ask anything**
-- Composer footer: `+` circle | **Swarm** pill (bolt + chevron) | **Speak** white pill (mic + label)
+- Composer footer: `+` circle | **Swarm** or **Fast** pill (bolt/flash + chevron) | **Speak** white pill (mic + label)
 
 ## Agents tab (img_2f635b5e1e5a)
 

@@ -25,7 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.UnfoldMore
@@ -76,6 +76,20 @@ fun ChatComposer(
 
     val canSend = value.isNotBlank() && !isExecuting
     val borderColor = if (isFocused) CoworkTokens.Mint.copy(alpha = 0.5f) else CoworkTokens.Border
+
+    val modeLabel = when (executionMode) {
+        ExecutionMode.SWARM -> stringResource(R.string.mode_swarm_short)
+        ExecutionMode.FAST -> stringResource(R.string.mode_fast)
+    }
+    val modeIcon = when (executionMode) {
+        ExecutionMode.SWARM -> Icons.Default.Bolt
+        ExecutionMode.FAST -> Icons.Default.FlashOn
+    }
+    val modeBorderColor = if (executionMode == ExecutionMode.SWARM) {
+        CoworkTokens.Mint.copy(alpha = 0.45f)
+    } else {
+        CoworkTokens.Border
+    }
 
     Column(
         modifier = modifier
@@ -136,16 +150,16 @@ fun ChatComposer(
                     onClick = { modeMenuOpen = true },
                     shape = CoworkTokens.ShapePill,
                     color = CoworkTokens.SurfaceElevated,
-                    modifier = Modifier.border(1.dp, CoworkTokens.Mint.copy(alpha = 0.45f), CoworkTokens.ShapePill),
+                    modifier = Modifier.border(1.dp, modeBorderColor, CoworkTokens.ShapePill),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.Default.Bolt, null, tint = CoworkTokens.Mint, modifier = Modifier.size(16.dp))
+                        Icon(modeIcon, null, tint = CoworkTokens.Mint, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.size(6.dp))
                         Text(
-                            text = stringResource(R.string.mode_swarm_short),
+                            text = modeLabel,
                             color = CoworkTokens.TextPrimary,
                             fontWeight = FontWeight.Medium,
                             style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
@@ -154,9 +168,14 @@ fun ChatComposer(
                     }
                 }
                 DropdownMenu(expanded = modeMenuOpen, onDismissRequest = { modeMenuOpen = false }) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.plan_mode)) }, onClick = { onModeChange(ExecutionMode.PLAN); modeMenuOpen = false })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.direct_mode)) }, onClick = { onModeChange(ExecutionMode.DIRECT); modeMenuOpen = false })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.schedule_mode)) }, onClick = { onModeChange(ExecutionMode.SCHEDULE); modeMenuOpen = false })
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.mode_swarm_short)) },
+                        onClick = { onModeChange(ExecutionMode.SWARM); modeMenuOpen = false },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.mode_fast)) },
+                        onClick = { onModeChange(ExecutionMode.FAST); modeMenuOpen = false },
+                    )
                 }
             }
 

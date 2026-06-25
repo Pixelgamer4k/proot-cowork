@@ -1,9 +1,10 @@
 package com.proot.cowork.domain.agent
 
 enum class ExecutionMode {
-    PLAN,
-    DIRECT,
-    SCHEDULE,
+    /** Multi-agent swarm orchestration. */
+    SWARM,
+    /** Single-agent fast execution. */
+    FAST,
 }
 
 data class AgentMessage(

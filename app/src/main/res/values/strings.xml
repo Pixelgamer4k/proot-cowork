@@ -59,10 +59,10 @@
     <string name="tab_schedule">Schedule</string>
     <string name="tab_files">Files</string>
     <string name="tab_terminal">Terminal</string>
-    <string name="mode_swarm_plan">Swarm · Plan</string>
-    <string name="mode_swarm_direct">Swarm · Execute</string>
-    <string name="mode_swarm_schedule">Swarm · Schedule</string>
     <string name="mode_swarm_short">Swarm</string>
+    <string name="mode_fast">Fast</string>
+    <string name="desktop_booting">Booting</string>
+    <string name="desktop_off">Off</string>
     <string name="speak">Speak</string>
     <string name="swarm_plan_title">Swarm plan</string>
     <string name="active_agents">Active Agents</string>

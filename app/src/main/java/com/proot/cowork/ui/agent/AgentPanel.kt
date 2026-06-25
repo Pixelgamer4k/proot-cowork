@@ -158,19 +158,14 @@ private fun AgentToolbar(
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ModeChip(
-                selected = executionMode == ExecutionMode.PLAN,
-                label = stringResource(R.string.plan_mode),
-                onClick = { onModeChange(ExecutionMode.PLAN) },
+                selected = executionMode == ExecutionMode.SWARM,
+                label = stringResource(R.string.mode_swarm_short),
+                onClick = { onModeChange(ExecutionMode.SWARM) },
             )
             ModeChip(
-                selected = executionMode == ExecutionMode.DIRECT,
-                label = stringResource(R.string.direct_mode),
-                onClick = { onModeChange(ExecutionMode.DIRECT) },
-            )
-            ModeChip(
-                selected = executionMode == ExecutionMode.SCHEDULE,
-                label = stringResource(R.string.schedule_mode),
-                onClick = { onModeChange(ExecutionMode.SCHEDULE) },
+                selected = executionMode == ExecutionMode.FAST,
+                label = stringResource(R.string.mode_fast),
+                onClick = { onModeChange(ExecutionMode.FAST) },
             )
         }
         Row {

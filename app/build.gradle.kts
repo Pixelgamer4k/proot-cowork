@@ -12,8 +12,8 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 58
-        versionName = "0.12.2-reference-ui"
+        versionCode = 59
+        versionName = "0.12.3-swarm-fast-desktop"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

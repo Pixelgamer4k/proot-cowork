@@ -35,7 +35,7 @@ data class HomeUiState(
     val desktopLogHint: String? = null,
     val messages: List<AgentMessage> = emptyList(),
     val swarmTasks: List<SwarmTask> = emptyList(),
-    val executionMode: ExecutionMode = ExecutionMode.PLAN,
+    val executionMode: ExecutionMode = ExecutionMode.SWARM,
     val inputText: String = "",
     val isExecuting: Boolean = false,
     val importError: String? = null,
@@ -196,9 +196,8 @@ class HomeViewModel(
 
             val mode = localState.value.executionMode
             val response = when (mode) {
-                ExecutionMode.PLAN -> buildPlanResponse(text)
-                ExecutionMode.DIRECT -> "Executing directly: \"$text\"\n\n(Phase 3: Koog agent will run tools in proot)"
-                ExecutionMode.SCHEDULE -> "Scheduled for later. (Phase 5: date/time picker + WorkManager)"
+                ExecutionMode.SWARM -> buildSwarmResponse(text)
+                ExecutionMode.FAST -> "Fast execution: \"$text\"\n\n(Phase 3: single Koog agent will run tools in proot)"
             }
 
             localState.update {
@@ -209,13 +208,13 @@ class HomeViewModel(
                         role = MessageRole.ASSISTANT,
                         content = response,
                     ),
-                    swarmTasks = if (mode == ExecutionMode.PLAN) demoSwarmTasks(text) else emptyList(),
+                    swarmTasks = if (mode == ExecutionMode.SWARM) demoSwarmTasks(text) else emptyList(),
                 )
             }
         }
     }
 
-    private fun buildPlanResponse(task: String): String {
+    private fun buildSwarmResponse(task: String): String {
         return """
             |## Plan for: $task
             |
@@ -245,17 +244,7 @@ class HomeViewModel(
     }
 
     fun onScheduleDraft(text: String) {
-        onModeChange(ExecutionMode.SCHEDULE)
-        onInputChange(text)
-        localState.update {
-            it.copy(
-                messages = it.messages + AgentMessage(
-                    id = UUID.randomUUID().toString(),
-                    role = MessageRole.SYSTEM,
-                    content = "Scheduled (preview): \"$text\" — WorkManager integration coming in a future build.",
-                ),
-            )
-        }
+        DesktopSession.appendLog("Scheduled (preview): $text")
     }
 
     fun onOpenFilePath(path: String) {

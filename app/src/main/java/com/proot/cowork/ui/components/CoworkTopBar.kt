@@ -3,12 +3,10 @@ package com.proot.cowork.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,9 +38,6 @@ import com.proot.cowork.R
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.ui.design.CoworkTokens
 import com.proot.cowork.ui.theme.Motion
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun CoworkTopBar(
@@ -147,49 +142,6 @@ fun CoworkTopBar(
             }
             IconButton(onClick = onPowerOff, enabled = online || desktopState == DesktopState.STOPPED) {
                 Icon(Icons.Default.PowerSettingsNew, stringResource(R.string.power_off), tint = enabledTint)
-            }
-        }
-    }
-}
-
-@Composable
-fun DesktopChromeTitleBar(modifier: Modifier = Modifier) {
-    val time = remember {
-        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
-    }
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(CoworkTokens.DesktopTitleBar.copy(alpha = 0.92f))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Applications", color = CoworkTokens.TextSecondary, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
-        Text("N $time", color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
-    }
-}
-
-@Composable
-fun DesktopChromeFrame(
-    modifier: Modifier = Modifier,
-    showTitleBar: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .clip(CoworkTokens.ShapeCard)
-            .border(1.dp, CoworkTokens.Border, CoworkTokens.ShapeCard)
-            .background(CoworkTokens.Surface),
-    ) {
-        androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxSize()) {
-            if (showTitleBar) DesktopChromeTitleBar()
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
-                content()
             }
         }
     }

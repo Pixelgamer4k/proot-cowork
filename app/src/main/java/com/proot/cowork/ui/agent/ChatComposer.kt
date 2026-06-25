@@ -45,7 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -76,7 +76,8 @@ fun ChatComposer(
 
     LaunchedEffect(isFocused) { onFocusChange(isFocused) }
 
-    val canSend = value.isNotBlank() && !isExecuting && isApiConfigured && !awaitingApproval
+    val showSend = value.isNotBlank() && !isExecuting && !awaitingApproval
+    val canSend = showSend && isApiConfigured
     val borderColor = if (isFocused) CoworkTokens.Mint.copy(alpha = 0.5f) else CoworkTokens.Border
 
     val modeLabel = when (executionMode) {
@@ -200,11 +201,12 @@ fun ChatComposer(
                     IconButton(onClick = onStop) {
                         Icon(Icons.Default.Stop, stringResource(R.string.stop_agent), tint = CoworkTokens.Failed)
                     }
-                } else if (canSend) {
+                } else if (showSend) {
                     Surface(
-                        onClick = onSend,
+                        onClick = { if (canSend) onSend() },
                         shape = CoworkTokens.ShapePill,
                         color = CoworkTokens.SpeakBg,
+                        modifier = Modifier.alpha(if (canSend) 1f else 0.5f),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),

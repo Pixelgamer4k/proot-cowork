@@ -82,9 +82,7 @@ class HomeViewModel(
                         },
                         swarmTasks = snap.swarmTasks.ifEmpty { local.swarmTasks },
                         agentStates = snap.agentStates,
-                        isExecuting = snap.isRunning,
-                        awaitingApproval = snap.awaitingApproval || local.awaitingApproval,
-                        pendingPlan = snap.pendingPlan ?: local.pendingPlan,
+                        isExecuting = snap.isRunning || local.isExecuting,
                     )
                 }
             }
@@ -343,6 +341,7 @@ class HomeViewModel(
                 isExecuting = true,
             )
         }
+        AgentExecutionSession.clearApproval()
         AgentExecutionService.startSwarm(application, plan, history, localState.value.maxAgentPool)
     }
 

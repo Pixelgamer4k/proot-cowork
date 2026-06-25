@@ -57,13 +57,17 @@ class HomeViewModel(
     private var chatJob: Job? = null
 
     val uiState: StateFlow<HomeUiState> = combine(
-        settingsRepository.rootfsState,
-        settingsRepository.llmConfig,
-        ImportSession.state,
-        DesktopSession.state,
-        DesktopSession.logLines,
-        localState,
-    ) { rootfs, llm, import, desktop, logs, local ->
+        combine(
+            settingsRepository.rootfsState,
+            settingsRepository.llmConfig,
+            ImportSession.state,
+        ) { rootfs, llm, import -> Triple(rootfs, llm, import) },
+        combine(
+            DesktopSession.state,
+            DesktopSession.logLines,
+            localState,
+        ) { desktop, logs, local -> Triple(desktop, logs, local) },
+    ) { (rootfs, llm, import), (desktop, logs, local) ->
         local.copy(
             desktopState = resolveDesktopState(rootfs.isInstalled, rootfs.isImporting, import, desktop),
             importUiState = import,

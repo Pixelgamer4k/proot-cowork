@@ -240,6 +240,42 @@ class HomeViewModel(
         SwarmTask("4", "Verify and report"),
     )
 
+    fun onQuickPrompt(prompt: String) {
+        onInputChange(prompt)
+    }
+
+    fun onScheduleDraft(text: String) {
+        onModeChange(ExecutionMode.SCHEDULE)
+        onInputChange(text)
+        localState.update {
+            it.copy(
+                messages = it.messages + AgentMessage(
+                    id = UUID.randomUUID().toString(),
+                    role = MessageRole.SYSTEM,
+                    content = "Scheduled (preview): \"$text\" — WorkManager integration coming in a future build.",
+                ),
+            )
+        }
+    }
+
+    fun onOpenFilePath(path: String) {
+        localState.update {
+            it.copy(
+                messages = it.messages + AgentMessage(
+                    id = UUID.randomUUID().toString(),
+                    role = MessageRole.SYSTEM,
+                    content = "File: $path",
+                ),
+            )
+        }
+        DesktopSession.appendLog("Opened path: $path")
+    }
+
+    fun onTerminalCommand(command: String) {
+        DesktopSession.appendLog("$ $command")
+        DesktopSession.appendLog("(Terminal execution — embed coming in a future build)")
+    }
+
     fun onOpenTerminal() {
         localState.update {
             it.copy(

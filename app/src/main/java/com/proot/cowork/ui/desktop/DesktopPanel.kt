@@ -182,7 +182,7 @@ private fun statusLabel(
 }
 
 @Composable
-private fun VncDesktopWithOverlay(message: String) {
+internal fun VncDesktopWithOverlay(message: String) {
     Box(modifier = Modifier.fillMaxSize()) {
         VncDesktopView(modifier = Modifier.fillMaxSize())
         Column(
@@ -199,7 +199,7 @@ private fun VncDesktopWithOverlay(message: String) {
 }
 
 @Composable
-private fun NoProotContainerContent(
+internal fun NoProotContainerContent(
     dropDirectoryLabel: String,
     importError: String?,
     isImportBusy: Boolean,
@@ -283,7 +283,7 @@ private fun NoProotContainerContent(
 }
 
 @Composable
-private fun NoRootfsContent(
+internal fun NoRootfsContent(
     dropDirectoryLabel: String,
     importError: String?,
     isImportBusy: Boolean,
@@ -341,7 +341,7 @@ private fun NoRootfsContent(
 }
 
 @Composable
-private fun ImportingContent(state: ImportUiState) {
+internal fun ImportingContent(state: ImportUiState) {
     val animatedProgress by animateFloatAsState(
         targetValue = state.progress.coerceIn(0f, 1f),
         animationSpec = Motion.springSmooth,
@@ -405,7 +405,7 @@ private fun ImportingContent(state: ImportUiState) {
 }
 
 @Composable
-private fun StoppedContent(onReboot: () -> Unit, errorHint: String?) {
+internal fun StoppedContent(onReboot: () -> Unit, errorHint: String?) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(horizontal = 16.dp),

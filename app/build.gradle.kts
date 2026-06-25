@@ -12,8 +12,8 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 55
-        versionName = "0.11.7-import-crash-fix"
+        versionCode = 56
+        versionName = "0.12.0-ui-refresh"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

@@ -26,19 +26,31 @@ class CoworkAgentRunner(private val context: Context) {
         userTask: String,
         history: List<AgentMessage>,
         isActive: () -> Boolean,
-        onPlanDelta: (String) -> Unit,
     ): TaskPlan {
         require(LlmEndpoint.isConfigured(config))
         val system = """
-            You are the Cowork Swarm Planner. Output ONLY valid JSON (no markdown fences) with:
-            {"summary":"one line","subtasks":[{"id":"1","title":"...","agent":"Researcher|Executor|Coder|Validator|Slack","parallelizable":true}]}
-            Assign each step to Planner, Researcher, Executor, Coder, Validator, or Slack.
-            Keep 3-6 subtasks. Be actionable for an Ubuntu proot mobile desktop.
+            You are the Cowork Swarm Planner. Reply with ONLY one JSON object, no markdown, no prose.
+            Schema:
+            {"summary":"short one-line plan title","subtasks":[{"id":"1","title":"step description","agent":"Executor","parallelizable":true}]}
+            Rules:
+            - agent must be one of: Planner, Researcher, Executor, Coder, Validator, Slack
+            - 2-5 subtasks, actionable inside Ubuntu proot
+            - parallelizable is boolean true or false (no spaces inside the word)
+            - valid JSON only: double quotes on keys and string values
         """.trimIndent()
         val messages = OpenAiCompatibleLlmClient.buildMessagesArray(system, history, userTask)
-        val result = OpenAiCompatibleLlmClient.complete(config, messages, temperature = 0.3)
-        onPlanDelta(result.content)
+        val result = OpenAiCompatibleLlmClient.complete(config, messages, temperature = 0.2)
         return parsePlanJson(result.content, userTask)
+    }
+
+    fun formatPlanForChat(plan: TaskPlan): String = buildString {
+        appendLine(plan.summary)
+        appendLine()
+        plan.subtasks.forEach { task ->
+            appendLine("${task.id}. ${task.agent.displayName} — ${task.title}")
+        }
+        appendLine()
+        append("Review the plan below and tap Execute to approve.")
     }
 
     suspend fun runFast(
@@ -232,36 +244,70 @@ class CoworkAgentRunner(private val context: Context) {
     }
 
     fun parsePlanJson(raw: String, userTask: String): TaskPlan {
-        val jsonText = extractJsonObject(raw)
+        val jsonText = normalizePlanJson(extractJsonObject(raw))
         return runCatching {
             val obj = JSONObject(jsonText)
             val summary = obj.optString("summary", "Swarm plan")
-            val subtasks = obj.optJSONArray("subtasks")?.let { arr ->
-                (0 until arr.length()).mapNotNull { i ->
-                    val item = arr.optJSONObject(i) ?: return@mapNotNull null
-                    SwarmTask(
-                        id = item.optString("id", "${i + 1}"),
-                        title = item.optString("title", "Step ${i + 1}"),
-                        agent = SwarmAgentType.fromString(item.optString("agent", "Executor")),
-                        parallelizable = item.optBoolean("parallelizable", true),
-                    )
-                }
-            }.orEmpty()
+            val subtasks = parseSubtasksFromJson(obj.optJSONArray("subtasks"))
             TaskPlan(
                 id = UUID.randomUUID().toString(),
                 summary = summary,
                 userTask = userTask,
-                subtasks = subtasks.ifEmpty { fallbackTasks(userTask) },
+                subtasks = subtasks.ifEmpty { parseSubtasksWithRegex(raw).ifEmpty { fallbackTasks(userTask) } },
             )
         }.getOrElse {
+            val regexTasks = parseSubtasksWithRegex(raw)
             TaskPlan(
                 id = UUID.randomUUID().toString(),
-                summary = "Swarm plan",
+                summary = extractSummaryWithRegex(raw) ?: "Swarm plan",
                 userTask = userTask,
-                subtasks = fallbackTasks(userTask),
+                subtasks = regexTasks.ifEmpty { fallbackTasks(userTask) },
             )
         }
     }
+
+    private fun parseSubtasksFromJson(arr: JSONArray?): List<SwarmTask> {
+        if (arr == null) return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val item = arr.optJSONObject(i) ?: return@mapNotNull null
+            SwarmTask(
+                id = item.optString("id", "${i + 1}"),
+                title = item.optString("title", "Step ${i + 1}"),
+                agent = SwarmAgentType.fromString(item.optString("agent", "Executor")),
+                parallelizable = item.optBoolean("parallelizable", true),
+            )
+        }
+    }
+
+    private fun parseSubtasksWithRegex(raw: String): List<SwarmTask> {
+        val tasks = mutableListOf<SwarmTask>()
+        val pattern = Regex(
+            """\{\s*"id"\s*:\s*"([^"]+)"\s*,\s*"title"\s*:\s*"([^"]+)"\s*,\s*"agent"\s*:\s*"([^"]+)"""",
+            RegexOption.IGNORE_CASE,
+        )
+        pattern.findAll(raw).forEach { match ->
+            tasks.add(
+                SwarmTask(
+                    id = match.groupValues[1],
+                    title = match.groupValues[2],
+                    agent = SwarmAgentType.fromString(match.groupValues[3]),
+                ),
+            )
+        }
+        return tasks
+    }
+
+    private fun extractSummaryWithRegex(raw: String): String? {
+        return Regex(""""summary"\s*:\s*"([^"]+)"""").find(raw)?.groupValues?.get(1)
+    }
+
+    private fun normalizePlanJson(text: String): String = text
+        .replace(Regex("""\s+"""), " ")
+        .replace(Regex("""fa\s+lse""", RegexOption.IGNORE_CASE), "false")
+        .replace(Regex("""tr\s+ue""", RegexOption.IGNORE_CASE), "true")
+        .replace(Regex(""""\s*title"""), "\"title\"")
+        .replace(Regex("""\{\s*"""), "{")
+        .trim()
 
     private fun fallbackTasks(userTask: String): List<SwarmTask> = listOf(
         SwarmTask("1", "Research: $userTask", SwarmAgentType.Researcher),

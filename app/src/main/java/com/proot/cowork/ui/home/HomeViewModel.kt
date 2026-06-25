@@ -273,7 +273,11 @@ class HomeViewModel(
                     chatError = null,
                     awaitingApproval = false,
                     pendingPlan = null,
-                    messages = it.messages + userMsg + AgentMessage(assistantId, MessageRole.ASSISTANT, ""),
+                    messages = it.messages + userMsg + AgentMessage(
+                        assistantId,
+                        MessageRole.ASSISTANT,
+                        "Planning swarm…",
+                    ),
                     swarmTasks = emptyList(),
                 )
             }
@@ -287,15 +291,8 @@ class HomeViewModel(
                             userTask = text,
                             history = history + userMsg,
                             isActive = { chatJob?.isActive == true },
-                        ) { delta ->
-                            localState.update { state ->
-                                state.copy(
-                                    messages = state.messages.map { msg ->
-                                        if (msg.id == assistantId) msg.copy(content = msg.content + delta) else msg
-                                    },
-                                )
-                            }
-                        }
+                        )
+                        val planMessage = agentRunner.formatPlanForChat(plan)
                         AgentExecutionSession.setAwaitingApproval(plan)
                         localState.update {
                             it.copy(
@@ -304,11 +301,7 @@ class HomeViewModel(
                                 pendingPlan = plan,
                                 swarmTasks = plan.subtasks,
                                 messages = it.messages.map { msg ->
-                                    if (msg.id == assistantId && msg.content.isBlank()) {
-                                        msg.copy(content = plan.summary)
-                                    } else {
-                                        msg
-                                    }
+                                    if (msg.id == assistantId) msg.copy(content = planMessage) else msg
                                 },
                             )
                         }

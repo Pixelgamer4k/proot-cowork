@@ -5,29 +5,30 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF6C9EFF),
-    onPrimary = Color(0xFF001A41),
-    primaryContainer = Color(0xFF00468A),
-    onPrimaryContainer = Color(0xFFD8E2FF),
-    secondary = Color(0xFFBBC7DB),
-    onSecondary = Color(0xFF253140),
-    secondaryContainer = Color(0xFF3B4858),
-    onSecondaryContainer = Color(0xFFD7E3F8),
-    tertiary = Color(0xFFD6BEE4),
-    background = Color(0xFF0F1419),
-    onBackground = Color(0xFFE1E2E8),
-    surface = Color(0xFF151B22),
-    onSurface = Color(0xFFE1E2E8),
-    surfaceVariant = Color(0xFF1C2330),
-    onSurfaceVariant = Color(0xFFC3C6CF),
-    outline = Color(0xFF8D9199),
+private val CoworkDarkScheme = darkColorScheme(
+    primary = Color(0xFF2DD4BF),
+    onPrimary = Color(0xFF00332E),
+    primaryContainer = Color(0xFF0D4F4A),
+    onPrimaryContainer = Color(0xFFB8FFF5),
+    secondary = Color(0xFF94A3B8),
+    onSecondary = Color(0xFF1E293B),
+    secondaryContainer = Color(0xFF334155),
+    onSecondaryContainer = Color(0xFFE2E8F0),
+    tertiary = Color(0xFFA78BFA),
+    background = Color(0xFF000000),
+    onBackground = Color(0xFFF1F5F9),
+    surface = Color(0xFF0A0A0A),
+    onSurface = Color(0xFFF1F5F9),
+    surfaceVariant = Color(0xFF1C1C1E),
+    onSurfaceVariant = Color(0xFFCBD5E1),
+    outline = Color(0xFF475569),
 )
 
 @Composable
 fun ProotCoworkTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = DarkColorScheme,
+        colorScheme = CoworkDarkScheme,
+        typography = AppTypography,
         content = content,
     )
 }

@@ -48,6 +48,22 @@ object RootfsTarballLocator {
         return candidates.firstOrNull { isReadableTarball(it) }
     }
 
+    /** Finds any readable tarball under app dirs whose name contains [namePrefix]. */
+    fun discoverAnyTarball(context: Context, namePrefix: String = "proot-cowork"): File? {
+        val dirs = buildList {
+            add(context.filesDir)
+            addAll(appExternalDataDirs(context))
+            context.cacheDir?.let { add(it) }
+        }
+        return dirs.flatMap { dir ->
+            dir.listFiles()?.filter { file ->
+                file.isFile &&
+                    file.name.endsWith(".tar.gz", ignoreCase = true) &&
+                    file.name.contains(namePrefix, ignoreCase = true)
+            }.orEmpty()
+        }.firstOrNull { isReadableTarball(it) }
+    }
+
     /** App-scoped external storage paths (work even when [Context.getExternalFilesDir] is null). */
     private fun appExternalDataDirs(context: Context): List<File> {
         val pkg = context.packageName

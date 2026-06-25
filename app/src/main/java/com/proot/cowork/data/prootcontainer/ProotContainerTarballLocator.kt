@@ -14,9 +14,15 @@ object ProotContainerTarballLocator {
     fun dropDirectoryLabel(context: Context): String = dropDirectory(context).absolutePath
 
     fun discover(context: Context, pathHint: String? = null): File? {
-        val name = pathHint?.let { File(it).name }?.takeIf { it.isNotBlank() } ?: DEFAULT_FILENAME
-        return RootfsTarballLocator.discover(context, pathHint ?: name)
-            ?: RootfsTarballLocator.discover(context, DEFAULT_FILENAME)
+        val names = buildList {
+            pathHint?.let { File(it).name }?.takeIf { it.isNotBlank() }?.let { add(it) }
+            add(DEFAULT_FILENAME)
+            add("proot-cowork-rootfs.tar.gz")
+        }.distinct()
+        for (name in names) {
+            RootfsTarballLocator.discover(context, name)?.let { return it }
+        }
+        return RootfsTarballLocator.discoverAnyTarball(context, "proot-cowork")
     }
 
     fun isReadableTarball(file: File): Boolean = RootfsTarballLocator.isReadableTarball(file)

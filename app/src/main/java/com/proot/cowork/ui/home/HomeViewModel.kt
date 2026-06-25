@@ -103,6 +103,10 @@ class HomeViewModel(
         localState.update { it.copy(inputText = text) }
     }
 
+    fun onStop() {
+        localState.update { it.copy(isExecuting = false) }
+    }
+
     fun onSend() {
         val text = localState.value.inputText.trim()
         if (text.isEmpty() || localState.value.isExecuting) return

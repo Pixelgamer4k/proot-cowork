@@ -94,7 +94,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     implementation("ai.koog:koog-agents-jvm:1.0.0")
-    implementation("ai.koog:koog-agents-additions-jvm:1.0.0-beta")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
 

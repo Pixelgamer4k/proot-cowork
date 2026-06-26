@@ -7,6 +7,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.proot.cowork.data.chat.ChatHistoryStore
 import com.proot.cowork.data.chat.ChatTranscriptExporter
+import com.proot.cowork.data.files.ArtifactEntry
+import com.proot.cowork.data.files.ArtifactsRepository
+import com.proot.cowork.data.schedule.ScheduleRepository
+import com.proot.cowork.data.schedule.ScheduleWorkScheduler
 import com.proot.cowork.data.skills.SkillRepository
 import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.prefs.SettingsRepository
@@ -39,6 +43,7 @@ import com.proot.cowork.domain.importing.ImportSession
 import com.proot.cowork.domain.importing.ImportUiState
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
+import com.proot.cowork.domain.schedule.ScheduledTask
 import com.proot.cowork.domain.skills.PendingSkillWrite
 import com.proot.cowork.domain.skills.SkillApprovalSession
 import com.proot.cowork.domain.skills.SkillDefinition
@@ -89,6 +94,10 @@ data class HomeUiState(
     val skills: List<SkillDefinition> = emptyList(),
     val pendingSkillWrite: PendingSkillWrite? = null,
     val skillSaveOffer: SkillSaveOffer? = null,
+    val scheduledTasks: List<ScheduledTask> = emptyList(),
+    val artifacts: List<ArtifactEntry> = emptyList(),
+    val shareArtifactUri: Uri? = null,
+    val containerInstalled: Boolean = false,
 )
 
 class HomeViewModel(
@@ -102,6 +111,8 @@ class HomeViewModel(
     private val chatHistoryStore = ChatHistoryStore(application)
     private val transcriptExporter = ChatTranscriptExporter(application)
     private val skillRepository = SkillRepository(application)
+    private val scheduleRepository = ScheduleRepository(application)
+    private val artifactsRepository = ArtifactsRepository(application)
     private val localState = MutableStateFlow(HomeUiState())
     private var chatJob: Job? = null
     private var agentWasRunning = false
@@ -111,6 +122,15 @@ class HomeViewModel(
         viewModelScope.launch {
             skillRepository.ensureSkillsDir()
             refreshSkills()
+            scheduleRepository.load()
+            scheduleRepository.reschedulePending()
+            refreshArtifacts()
+        }
+
+        viewModelScope.launch {
+            scheduleRepository.tasks.collect { tasks ->
+                localState.update { it.copy(scheduledTasks = tasks) }
+            }
         }
 
         viewModelScope.launch {
@@ -199,6 +219,7 @@ class HomeViewModel(
             importUiState = import,
             distroName = rootfs.distroName,
             isApiConfigured = LlmEndpoint.isConfigured(llm),
+            containerInstalled = rootfs.isInstalled,
             desktopLogHint = if (desktop == DesktopState.STOPPED) {
                 logs.lastOrNull(::looksLikeDesktopError) ?: logs.lastOrNull()
             } else {
@@ -206,6 +227,80 @@ class HomeViewModel(
             },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
+
+    fun clearShareArtifactUri() {
+        localState.update { it.copy(shareArtifactUri = null) }
+    }
+
+    private suspend fun refreshArtifacts() {
+        val items = artifactsRepository.listArtifacts()
+        localState.update { it.copy(artifacts = items) }
+    }
+
+    fun onScheduleTask(prompt: String, triggerAtMillis: Long) {
+        viewModelScope.launch {
+            val task = scheduleRepository.create(prompt, triggerAtMillis)
+            ScheduleWorkScheduler.enqueue(application, task)
+            localState.update {
+                it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.schedule_created))
+            }
+        }
+    }
+
+    fun onCancelScheduledTask(taskId: String) {
+        viewModelScope.launch {
+            scheduleRepository.cancel(taskId)
+            localState.update {
+                it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.schedule_cancelled))
+            }
+        }
+    }
+
+    fun onDeleteScheduledTask(taskId: String) {
+        viewModelScope.launch {
+            scheduleRepository.delete(taskId)
+        }
+    }
+
+    fun onShareArtifact(path: String) {
+        viewModelScope.launch {
+            val file = java.io.File(path)
+            if (!file.exists()) return@launch
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                application,
+                "${application.packageName}.fileprovider",
+                file,
+            )
+            localState.update { it.copy(shareArtifactUri = uri) }
+        }
+    }
+
+    fun onDeleteArtifact(path: String) {
+        viewModelScope.launch {
+            if (artifactsRepository.delete(path)) {
+                refreshArtifacts()
+                localState.update {
+                    it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.files_deleted))
+                }
+            }
+        }
+    }
+
+    fun onUploadArtifact(uri: Uri, displayName: String?) {
+        viewModelScope.launch {
+            val saved = artifactsRepository.importFromUri(application, uri, displayName)
+            refreshArtifacts()
+            localState.update {
+                it.copy(
+                    chatSnackbar = if (saved != null) {
+                        application.getString(com.proot.cowork.R.string.files_uploaded)
+                    } else {
+                        application.getString(com.proot.cowork.R.string.files_upload_failed)
+                    },
+                )
+            }
+        }
+    }
 
     private suspend fun refreshSkills() {
         val discovered = skillRepository.discover()
@@ -581,6 +676,7 @@ class HomeViewModel(
                 java.io.FileOutputStream(path).use { out ->
                     frame.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
                 }
+                refreshArtifacts()
                 "Screenshot saved: ${path.name}"
             } else {
                 "No VNC frame available yet"
@@ -832,35 +928,26 @@ class HomeViewModel(
     }
 
     fun onScheduleDraft(text: String) {
-        DesktopSession.appendLog("Scheduled (preview): $text")
+        onScheduleTask(text, System.currentTimeMillis() + 3_600_000L)
     }
 
     fun onOpenFilePath(path: String) {
-        localState.update {
-            it.copy(
-                messages = it.messages + AgentMessage(
-                    id = UUID.randomUUID().toString(),
-                    role = MessageRole.SYSTEM,
-                    content = "File: $path",
-                ),
-            )
+        viewModelScope.launch {
+            val file = java.io.File(path)
+            val (name, snippet) = AttachmentReader.readArtifactFile(file)
+            appendAttachmentToInput(name, snippet)
+            localState.update {
+                it.copy(
+                    chatSnackbar = application.getString(com.proot.cowork.R.string.files_attached_to_chat, name),
+                )
+            }
         }
-        DesktopSession.appendLog("Opened path: $path")
-    }
-
-    fun onTerminalCommand(command: String) {
-        DesktopSession.appendLog("$ $command")
-        DesktopSession.appendLog("(Terminal execution — embed coming in a future build)")
     }
 
     fun onOpenTerminal() {
         localState.update {
             it.copy(
-                messages = it.messages + AgentMessage(
-                    id = UUID.randomUUID().toString(),
-                    role = MessageRole.SYSTEM,
-                    content = "Shell access will open in a future update.",
-                ),
+                chatSnackbar = application.getString(com.proot.cowork.R.string.terminal_open_hint),
             )
         }
     }

@@ -39,8 +39,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
-import com.proot.cowork.domain.desktop.TermuxStackSession
-import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.ui.agent.ChatComposer
 import com.proot.cowork.ui.components.CoworkBottomNav
@@ -72,8 +70,6 @@ fun HomeScreen(
     ),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val stackLogs by TermuxStackSession.logLines.collectAsState()
-    val desktopLogs by DesktopSession.logLines.collectAsState()
     val density = LocalDensity.current
     var composerHeightPx by remember { mutableStateOf(0) }
     var selectedTab by rememberSaveable { mutableStateOf(CoworkTab.Chat) }
@@ -87,6 +83,13 @@ fun HomeScreen(
         if (uri != null) viewModel.onAttachFile(uri)
     }
 
+    val fileUploadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            val name = uri.lastPathSegment?.substringAfterLast('/')
+            viewModel.onUploadArtifact(uri, name)
+        }
+    }
+
     val artifactFiles = remember(uiState.messages.size) {
         settingsRepository.getArtifactsDir()
             .listFiles()
@@ -98,6 +101,17 @@ fun HomeScreen(
     }
 
     val shareContext = LocalContext.current
+
+    LaunchedEffect(uiState.shareArtifactUri) {
+        val uri = uiState.shareArtifactUri ?: return@LaunchedEffect
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "*/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        shareContext.startActivity(Intent.createChooser(intent, shareContext.getString(com.proot.cowork.R.string.files_share)))
+        viewModel.clearShareArtifactUri()
+    }
 
     LaunchedEffect(uiState.shareTranscriptUri) {
         val uri = uiState.shareTranscriptUri ?: return@LaunchedEffect
@@ -125,7 +139,6 @@ fun HomeScreen(
 
     val composerBottomPadding = with(density) { composerHeightPx.toDp() }
     val showChatComposer = selectedTab == CoworkTab.Chat && uiState.desktopState != DesktopState.IMPORTING
-    val terminalLogs = remember(stackLogs, desktopLogs) { (stackLogs + desktopLogs).takeLast(120) }
 
     Box(
         modifier = Modifier
@@ -209,14 +222,23 @@ fun HomeScreen(
                         skillsDirLabel = settingsRepository.getSkillsDir().absolutePath,
                         onToggleSkill = viewModel::onToggleSkill,
                     )
-                    CoworkTab.Schedule -> ScheduleTabContent(onScheduleDraft = viewModel::onScheduleDraft)
+                    CoworkTab.Schedule -> ScheduleTabContent(
+                        tasks = uiState.scheduledTasks,
+                        isApiConfigured = uiState.isApiConfigured,
+                        onSchedule = viewModel::onScheduleTask,
+                        onCancel = viewModel::onCancelScheduledTask,
+                        onDelete = viewModel::onDeleteScheduledTask,
+                    )
                     CoworkTab.Files -> FilesTabContent(
-                        artifactsDir = settingsRepository.getArtifactsDir(),
+                        artifacts = uiState.artifacts,
+                        artifactsDirLabel = settingsRepository.getArtifactsDir().absolutePath,
                         onOpenPath = viewModel::onOpenFilePath,
+                        onSharePath = viewModel::onShareArtifact,
+                        onDeletePath = viewModel::onDeleteArtifact,
+                        onUpload = { fileUploadLauncher.launch(arrayOf("*/*")) },
                     )
                     CoworkTab.Terminal -> TerminalTabContent(
-                        logLines = terminalLogs,
-                        onCommandSubmit = viewModel::onTerminalCommand,
+                        containerInstalled = uiState.containerInstalled,
                     )
                 }
             }

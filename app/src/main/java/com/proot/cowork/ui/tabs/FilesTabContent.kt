@@ -1,7 +1,8 @@
 package com.proot.cowork.ui.tabs
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,32 +15,35 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
+import com.proot.cowork.data.files.ArtifactEntry
+import com.proot.cowork.data.files.ArtifactsRepository
 import com.proot.cowork.ui.design.CoworkTokens
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
-data class FileEntry(val name: String, val path: String, val isDirectory: Boolean, val sizeLabel: String, val dateLabel: String)
 
 @Composable
-fun FilesTabContent(artifactsDir: File, onOpenPath: (String) -> Unit, modifier: Modifier = Modifier) {
-    val entries = remember(artifactsDir.absolutePath) { listDemoAndArtifactEntries(artifactsDir) }
+fun FilesTabContent(
+    artifacts: List<ArtifactEntry>,
+    artifactsDirLabel: String,
+    onOpenPath: (String) -> Unit,
+    onSharePath: (String) -> Unit,
+    onDeletePath: (String) -> Unit,
+    onUpload: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -48,72 +52,83 @@ fun FilesTabContent(artifactsDir: File, onOpenPath: (String) -> Unit, modifier: 
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Home, null, tint = CoworkTokens.TextMuted, modifier = Modifier.size(14.dp))
-                Text("  ›  home  ›  ", color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
-                Text("coworker", color = CoworkTokens.Mint, style = androidx.compose.material3.MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Text("  ›  artifacts", color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
             }
-            Spacer(Modifier.size(12.dp))
+            Text(
+                artifactsDirLabel,
+                color = CoworkTokens.TextMuted,
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
         }
-        items(entries) { FileRow(it) { onOpenPath(it.path) } }
+
+        if (artifacts.isEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.files_empty),
+                    color = CoworkTokens.TextMuted,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
+            }
+        } else {
+            items(artifacts, key = { it.path }) { entry ->
+                ArtifactRow(
+                    entry = entry,
+                    onOpen = { onOpenPath(entry.path) },
+                    onShare = { onSharePath(entry.path) },
+                    onDelete = { onDeletePath(entry.path) },
+                )
+            }
+        }
+
         item {
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                TextButton(onClick = { }) { Text(stringResource(R.string.files_new_folder), color = CoworkTokens.TextSecondary) }
-                TextButton(onClick = { }) { Text(stringResource(R.string.files_upload), color = CoworkTokens.TextSecondary) }
-                TextButton(onClick = { }) { Text(stringResource(R.string.files_select), color = CoworkTokens.TextSecondary) }
+                TextButton(onClick = onUpload) {
+                    Text(stringResource(R.string.files_upload), color = CoworkTokens.Mint)
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileRow(entry: FileEntry, onClick: () -> Unit) {
-    val accent = if (entry.isDirectory) CoworkTokens.FolderAccent else CoworkTokens.FileAccent
-    val icon: ImageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.Default.Description
+private fun ArtifactRow(
+    entry: ArtifactEntry,
+    onOpen: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onOpen, onLongClick = onShare)
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             Modifier
                 .size(36.dp)
-                .border(1.dp, accent.copy(alpha = 0.55f), CoworkTokens.ShapeIconTile)
+                .border(1.dp, CoworkTokens.FileAccent.copy(alpha = 0.55f), CoworkTokens.ShapeIconTile)
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-        ) { Icon(icon, null, tint = accent, modifier = Modifier.size(18.dp)) }
-        Text(
-            entry.name,
-            Modifier.weight(1f).padding(horizontal = 12.dp),
-            fontWeight = FontWeight.Medium,
-            color = CoworkTokens.TextPrimary,
-        )
-        Column(horizontalAlignment = Alignment.End) {
+        ) {
+            Icon(Icons.Default.Description, null, tint = CoworkTokens.FileAccent, modifier = Modifier.size(18.dp))
+        }
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            Text(entry.name, fontWeight = FontWeight.Medium, color = CoworkTokens.TextPrimary)
             Text(
-                if (entry.isDirectory) "--" else entry.sizeLabel,
+                "${ArtifactsRepository.formatSize(entry.sizeBytes)} · ${ArtifactsRepository.formatDate(entry.lastModified)}",
                 color = CoworkTokens.TextMuted,
-                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             )
-            Text(entry.dateLabel, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+        }
+        IconButton(onClick = onShare) {
+            Icon(Icons.Default.IosShare, stringResource(R.string.files_share), tint = CoworkTokens.TextMuted, modifier = Modifier.size(18.dp))
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Default.Delete, stringResource(R.string.files_delete), tint = CoworkTokens.Failed, modifier = Modifier.size(18.dp))
         }
     }
-}
-
-private fun listDemoAndArtifactEntries(dir: File): List<FileEntry> {
-    val fmt = SimpleDateFormat("MMM d", Locale.getDefault())
-    val demo = listOf(
-        FileEntry("projects/", "", true, "", "Jun 25"),
-        FileEntry("documents/", "", true, "", "Jun 25"),
-        FileEntry("downloads/", "", true, "", "Jun 24"),
-        FileEntry("app.py", "", false, "4.2 KB", "Jun 25"),
-        FileEntry("requirements.txt", "", false, "1.1 KB", "Jun 25"),
-    )
-    val real = dir.listFiles()?.filter { it.isFile }?.map {
-        FileEntry(it.name, it.absolutePath, false, formatSize(it.length()), fmt.format(Date(it.lastModified())))
-    }.orEmpty()
-    return demo + real
-}
-
-private fun formatSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    return if (kb < 1024) "${"%.1f".format(kb)} KB" else "${"%.1f".format(kb / 1024.0)} MB"
 }

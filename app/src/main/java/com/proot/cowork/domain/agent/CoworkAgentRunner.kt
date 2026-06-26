@@ -2,9 +2,10 @@ package com.proot.cowork.domain.agent
 
 import android.content.Context
 import com.proot.cowork.data.llm.LlmEndpoint
+import com.proot.cowork.data.prefs.LlmConfig
 import com.proot.cowork.data.llm.LlmToolCall
 import com.proot.cowork.data.llm.OpenAiCompatibleLlmClient
-import com.proot.cowork.data.prefs.LlmConfig
+import com.proot.cowork.data.skills.SkillRepository
 import com.proot.cowork.domain.agent.tools.AgentToolRegistry
 import com.proot.cowork.domain.agent.tools.CodeTool
 import com.proot.cowork.domain.agent.tools.FileSystemTool
@@ -25,6 +26,7 @@ class ToolLimitReachedException : CancellationException("Tool call limit reached
 class CoworkAgentRunner(private val context: Context) {
 
     private val tools = AgentToolRegistry(context)
+    private val skillRepository = SkillRepository(context)
 
     suspend fun planSwarm(
         config: LlmConfig,
@@ -68,10 +70,12 @@ class CoworkAgentRunner(private val context: Context) {
         onAssistantDelta: (String) -> Unit,
         onToolEvent: (AgentMessage) -> Unit,
     ): String {
+        val skillsSuffix = skillsPromptSuffix()
         val system = """
             You are the Cowork Fast agent with direct access to proot tools.
             Execute the user's task using tools when needed. Be concise in final answers.
-        """.trimIndent()
+            $skillsSuffix
+        """.trimIndent().trim()
         return runToolLoop(
             config = config,
             agent = SwarmAgentType.Executor,
@@ -136,7 +140,7 @@ class CoworkAgentRunner(private val context: Context) {
                         runToolLoop(
                             config = config,
                             agent = task.agent,
-                            systemPrompt = agentSystemPrompt(task.agent),
+                            systemPrompt = agentSystemPrompt(task.agent, skillsPromptSuffix()),
                             history = history,
                             userMessage = "Swarm step ${task.id}: ${task.title}\nOriginal task: ${plan.userTask}",
                             isActive = isActive,
@@ -330,14 +334,27 @@ class CoworkAgentRunner(private val context: Context) {
         }
     }
 
-    private fun agentSystemPrompt(agent: SwarmAgentType): String = when (agent) {
-        SwarmAgentType.Planner -> "You are the Planner. Break work into clear steps."
-        SwarmAgentType.Researcher -> "You are the Researcher. Use web_fetch and read_file to gather facts."
-        SwarmAgentType.Executor -> "You are the Executor. Run shell commands in proot to accomplish tasks."
-        SwarmAgentType.Coder -> "You are the Coder. Use edit_and_test_code and shell tools."
-        SwarmAgentType.Validator -> "You are the Validator. Verify outputs and report pass/fail."
-        SwarmAgentType.Slack -> "You are Slack notifications. Summarize progress via shell echo and short messages."
+    private fun agentSystemPrompt(agent: SwarmAgentType, skillsSuffix: String): String {
+        val base = when (agent) {
+            SwarmAgentType.Planner -> "You are the Planner. Break work into clear steps."
+            SwarmAgentType.Researcher -> "You are the Researcher. Use web_fetch and read_file to gather facts."
+            SwarmAgentType.Executor -> "You are the Executor. Run shell commands in proot to accomplish tasks."
+            SwarmAgentType.Coder -> "You are the Coder. Use edit_and_test_code and shell tools."
+            SwarmAgentType.Validator -> "You are the Validator. Verify outputs and report pass/fail."
+            SwarmAgentType.Slack -> "You are Slack notifications. Summarize progress via shell echo and short messages."
+        }
+        return if (skillsSuffix.isBlank()) base else "$base\n$skillsSuffix"
     }
+
+    private suspend fun skillsPromptSuffix(): String = runCatching {
+        val discovered = skillRepository.discover()
+        val summary = skillRepository.activeSkillSummaries(discovered)
+        if (summary.isBlank()) {
+            ""
+        } else {
+            "Enabled skills: $summary. Use skills_list to browse and skill_view before applying a skill workflow. Use skill_manage only to propose new skills (requires user approval)."
+        }
+    }.getOrDefault("")
 
     fun parsePlanJson(raw: String, userTask: String): TaskPlan {
         val jsonText = normalizePlanJson(extractJsonObject(raw))

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Base64
 import com.proot.cowork.data.proot.ProotGuestShellExecutor
 import com.proot.cowork.data.proot.ShellResult
+import com.proot.cowork.data.skills.SkillRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -18,6 +19,7 @@ data class ToolInvocation(
 
 class AgentToolRegistry(context: Context) {
     private val shell = ProotGuestShellExecutor(context)
+    private val skills = SkillRepository(context)
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
@@ -29,6 +31,9 @@ class AgentToolRegistry(context: Context) {
         FileSystemTool.NAME_WRITE -> FileSystemTool.write(shell, invocation.arguments)
         WebTool.NAME -> WebTool.execute(shell, http, invocation.arguments)
         CodeTool.NAME -> CodeTool.execute(shell, invocation.arguments)
+        SkillTools.NAME_LIST -> SkillTools.list(skills, invocation.arguments)
+        SkillTools.NAME_VIEW -> SkillTools.view(skills, invocation.arguments)
+        SkillTools.NAME_MANAGE -> SkillTools.manage(skills, invocation.arguments)
         else -> "Unknown tool: ${invocation.name}"
     }
 
@@ -38,23 +43,26 @@ class AgentToolRegistry(context: Context) {
         put(FileSystemTool.writeDefinition())
         put(WebTool.definition())
         put(CodeTool.definition())
+        put(SkillTools.listDefinition())
+        put(SkillTools.viewDefinition())
+        put(SkillTools.manageDefinition())
     }
 
     fun toolsForAgent(agent: com.proot.cowork.domain.agent.SwarmAgentType): org.json.JSONArray {
         val all = openAiToolDefinitions()
         val allowed = when (agent) {
             com.proot.cowork.domain.agent.SwarmAgentType.Planner ->
-                setOf(FileSystemTool.NAME_READ)
+                setOf(FileSystemTool.NAME_READ, SkillTools.NAME_LIST, SkillTools.NAME_VIEW)
             com.proot.cowork.domain.agent.SwarmAgentType.Researcher ->
-                setOf(WebTool.NAME, FileSystemTool.NAME_READ, ProotShellTool.NAME)
+                setOf(WebTool.NAME, FileSystemTool.NAME_READ, ProotShellTool.NAME, SkillTools.NAME_LIST, SkillTools.NAME_VIEW)
             com.proot.cowork.domain.agent.SwarmAgentType.Executor ->
-                setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, FileSystemTool.NAME_WRITE)
+                setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, FileSystemTool.NAME_WRITE, SkillTools.NAME_LIST, SkillTools.NAME_VIEW, SkillTools.NAME_MANAGE)
             com.proot.cowork.domain.agent.SwarmAgentType.Coder ->
-                setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, FileSystemTool.NAME_WRITE, CodeTool.NAME)
+                setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, FileSystemTool.NAME_WRITE, CodeTool.NAME, SkillTools.NAME_LIST, SkillTools.NAME_VIEW, SkillTools.NAME_MANAGE)
             com.proot.cowork.domain.agent.SwarmAgentType.Validator ->
-                setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ)
+                setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, SkillTools.NAME_LIST, SkillTools.NAME_VIEW)
             com.proot.cowork.domain.agent.SwarmAgentType.Slack ->
-                setOf(ProotShellTool.NAME)
+                setOf(ProotShellTool.NAME, SkillTools.NAME_LIST)
         }
         return org.json.JSONArray().apply {
             for (i in 0 until all.length()) {

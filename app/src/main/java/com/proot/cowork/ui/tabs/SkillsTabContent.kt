@@ -1,6 +1,7 @@
 package com.proot.cowork.ui.tabs
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,58 +26,111 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
+import com.proot.cowork.domain.skills.SkillDefinition
 import com.proot.cowork.ui.components.CoworkSectionLabel
 import com.proot.cowork.ui.design.CoworkTokens
 
-private data class SkillItem(val id: String, val description: String, val tags: List<String>, val uses: Int, val active: Boolean)
-
-private val SKILLS = listOf(
-    SkillItem("python-development", "Write, debug, and run Python code with best practices", listOf("python", "coding"), 47, true),
-    SkillItem("web-automation", "Browse websites and automate form interactions", listOf("browser", "automation"), 23, true),
-    SkillItem("file-management", "Organize, search, and manage files in the container", listOf("files", "system"), 31, true),
-    SkillItem("data-analysis", "Analyze datasets with pandas and visualization tools", listOf("data", "python"), 0, false),
-    SkillItem("devops", "Manage services, cron jobs, and system packages", listOf("system", "automation"), 0, false),
-    SkillItem("api-integration", "Connect to REST APIs and webhooks", listOf("api", "network"), 0, false),
-)
-
 @Composable
-fun SkillsTabContent(@Suppress("UNUSED_PARAMETER") skillsDirLabel: String, modifier: Modifier = Modifier) {
-    val active = SKILLS.filter { it.active }
-    val available = SKILLS.filter { !it.active }
+fun SkillsTabContent(
+    skills: List<SkillDefinition>,
+    skillsDirLabel: String,
+    onToggleSkill: (String, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val active = skills.filter { it.enabled }
+    val available = skills.filter { !it.enabled }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        item {
+            Text(
+                stringResource(R.string.skills_dir_hint, skillsDirLabel),
+                color = CoworkTokens.TextMuted,
+                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+            )
+        }
         item { CoworkSectionLabel(stringResource(R.string.skills_active_header, active.size)) }
-        items(active) { SkillCard(it) }
+        if (active.isEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.skills_empty_active),
+                    color = CoworkTokens.TextMuted,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
+            }
+        } else {
+            items(active, key = { it.id }) { SkillCard(it, onToggleSkill) }
+        }
         item { Spacer(Modifier.size(4.dp)); CoworkSectionLabel(stringResource(R.string.skills_available_header, available.size)) }
-        items(available) { SkillCard(it) }
+        if (available.isEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.skills_empty_available),
+                    color = CoworkTokens.TextMuted,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
+            }
+        } else {
+            items(available, key = { it.id }) { SkillCard(it, onToggleSkill) }
+        }
     }
 }
 
 @Composable
-private fun SkillCard(skill: SkillItem) {
+private fun SkillCard(skill: SkillDefinition, onToggle: (String, Boolean) -> Unit) {
     Surface(
         shape = CoworkTokens.ShapeCard,
         color = CoworkTokens.Surface,
-        modifier = Modifier.fillMaxWidth().border(1.dp, CoworkTokens.Border, CoworkTokens.ShapeCard),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, CoworkTokens.Border, CoworkTokens.ShapeCard)
+            .clickable { onToggle(skill.id, !skill.enabled) },
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(skill.id, fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
-                Icon(if (skill.active) Icons.Default.Check else Icons.Default.Add, null, tint = if (skill.active) CoworkTokens.Mint else CoworkTokens.TextMuted)
+                Text(skill.name, fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
+                Icon(
+                    if (skill.enabled) Icons.Default.Check else Icons.Default.Add,
+                    contentDescription = if (skill.enabled) {
+                        stringResource(R.string.skill_disable)
+                    } else {
+                        stringResource(R.string.skill_enable)
+                    },
+                    tint = if (skill.enabled) CoworkTokens.Mint else CoworkTokens.TextMuted,
+                )
             }
-            Text(skill.description, Modifier.padding(top = 6.dp), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                skill.description,
+                Modifier.padding(top = 6.dp),
+                color = CoworkTokens.TextMuted,
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     skill.tags.forEach { tag ->
                         Surface(shape = CoworkTokens.ShapePill, color = CoworkTokens.Mint.copy(alpha = 0.22f)) {
-                            Text(tag, Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = CoworkTokens.SpeakFg, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                            Text(
+                                tag,
+                                Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                color = CoworkTokens.SpeakFg,
+                                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                            )
                         }
                     }
                 }
-                if (skill.active) Text(stringResource(R.string.skill_uses, skill.uses), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                if (skill.enabled) {
+                    Text(
+                        stringResource(R.string.skill_uses, skill.useCount),
+                        color = CoworkTokens.TextMuted,
+                        style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                    )
+                }
             }
         }
     }

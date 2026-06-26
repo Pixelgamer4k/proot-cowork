@@ -7,12 +7,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.proot.cowork.data.chat.ChatHistoryStore
 import com.proot.cowork.data.chat.ChatTranscriptExporter
+import com.proot.cowork.data.skills.SkillRepository
 import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.ImportResult
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.domain.agent.AgentExecutionSession
+import com.proot.cowork.domain.agent.AgentExecutionSnapshot
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.CoworkAgentRunner
 import com.proot.cowork.domain.agent.DEFAULT_MAX_AGENT_POOL
@@ -37,6 +39,10 @@ import com.proot.cowork.domain.importing.ImportSession
 import com.proot.cowork.domain.importing.ImportUiState
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
+import com.proot.cowork.domain.skills.PendingSkillWrite
+import com.proot.cowork.domain.skills.SkillApprovalSession
+import com.proot.cowork.domain.skills.SkillDefinition
+import com.proot.cowork.domain.skills.SkillSaveOffer
 import com.proot.cowork.domain.vnc.VncSession
 import com.proot.cowork.service.AgentExecutionService
 import kotlinx.coroutines.Job
@@ -80,6 +86,9 @@ data class HomeUiState(
     val cancellationMessage: String? = null,
     val chatSnackbar: String? = null,
     val shareTranscriptUri: Uri? = null,
+    val skills: List<SkillDefinition> = emptyList(),
+    val pendingSkillWrite: PendingSkillWrite? = null,
+    val skillSaveOffer: SkillSaveOffer? = null,
 )
 
 class HomeViewModel(
@@ -92,10 +101,24 @@ class HomeViewModel(
     private val agentRunner = CoworkAgentRunner(application)
     private val chatHistoryStore = ChatHistoryStore(application)
     private val transcriptExporter = ChatTranscriptExporter(application)
+    private val skillRepository = SkillRepository(application)
     private val localState = MutableStateFlow(HomeUiState())
     private var chatJob: Job? = null
+    private var agentWasRunning = false
+    private var lastUserTask: String? = null
 
     init {
+        viewModelScope.launch {
+            skillRepository.ensureSkillsDir()
+            refreshSkills()
+        }
+
+        viewModelScope.launch {
+            SkillApprovalSession.pending.collect { pending ->
+                localState.update { it.copy(pendingSkillWrite = pending) }
+            }
+        }
+
         viewModelScope.launch {
             val saved = chatHistoryStore.load()
             if (saved.messages.isNotEmpty()) {
@@ -119,6 +142,10 @@ class HomeViewModel(
 
         viewModelScope.launch {
             AgentExecutionSession.snapshot.collect { snap ->
+                if (agentWasRunning && !snap.isRunning) {
+                    maybeOfferSkillSave(snap)
+                }
+                agentWasRunning = snap.isRunning
                 localState.update { local ->
                     val mergedMessages = if (snap.messages.isNotEmpty()) {
                         mergeMessages(local.messages, snap.messages)
@@ -179,6 +206,83 @@ class HomeViewModel(
             },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
+
+    private suspend fun refreshSkills() {
+        val discovered = skillRepository.discover()
+        localState.update { it.copy(skills = discovered) }
+    }
+
+    private fun maybeOfferSkillSave(snap: AgentExecutionSnapshot) {
+        if (snap.cancellationMessage != null || snap.toolLimitReached) return
+        if (localState.value.skillSaveOffer != null || localState.value.pendingSkillWrite != null) return
+        val userTask = lastUserTask
+            ?: snap.messages.lastOrNull { it.role == MessageRole.USER }?.content
+            ?: return
+        val offer = skillRepository.buildSaveOffer(
+            userTask = userTask,
+            toolCallCount = snap.toolCallCount,
+            shellLog = snap.shellCommandLog,
+        ) ?: return
+        localState.update { it.copy(skillSaveOffer = offer) }
+    }
+
+    fun onToggleSkill(skillId: String, enabled: Boolean) {
+        viewModelScope.launch {
+            skillRepository.setEnabled(skillId, enabled)
+            refreshSkills()
+        }
+    }
+
+    fun onApproveSkillWrite() {
+        val pending = localState.value.pendingSkillWrite ?: return
+        viewModelScope.launch {
+            val result = skillRepository.applyApprovedWrite(pending)
+            SkillApprovalSession.clear()
+            refreshSkills()
+            localState.update {
+                it.copy(
+                    chatSnackbar = result,
+                    messages = it.messages + AgentMessage(
+                        id = UUID.randomUUID().toString(),
+                        role = MessageRole.SYSTEM,
+                        content = result,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun onRejectSkillWrite() {
+        SkillApprovalSession.clear()
+        localState.update {
+            it.copy(
+                chatSnackbar = application.getString(com.proot.cowork.R.string.skill_rejected),
+            )
+        }
+    }
+
+    fun onAcceptSkillSaveOffer() {
+        val offer = localState.value.skillSaveOffer ?: return
+        viewModelScope.launch {
+            val result = skillRepository.saveSkillDirect(offer.skillId, offer.skillMdContent)
+            refreshSkills()
+            localState.update {
+                it.copy(
+                    skillSaveOffer = null,
+                    chatSnackbar = result,
+                    messages = it.messages + AgentMessage(
+                        id = UUID.randomUUID().toString(),
+                        role = MessageRole.SYSTEM,
+                        content = result,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun onDismissSkillSaveOffer() {
+        localState.update { it.copy(skillSaveOffer = null) }
+    }
 
     private fun mergeMessages(existing: List<AgentMessage>, incoming: List<AgentMessage>): List<AgentMessage> {
         if (incoming.isEmpty()) return existing
@@ -301,9 +405,11 @@ class HomeViewModel(
 
     fun onClearConversation() {
         if (localState.value.isExecuting) onStop()
+        SkillApprovalSession.clear()
         viewModelScope.launch {
             chatHistoryStore.clear()
         }
+        lastUserTask = null
         localState.update {
             it.copy(
                 messages = emptyList(),
@@ -311,6 +417,8 @@ class HomeViewModel(
                 swarmTasks = emptyList(),
                 awaitingApproval = false,
                 pendingPlan = null,
+                skillSaveOffer = null,
+                pendingSkillWrite = null,
                 inputText = "",
                 isExecuting = false,
                 chatSnackbar = application.getString(com.proot.cowork.R.string.chat_cleared),
@@ -566,6 +674,7 @@ class HomeViewModel(
     private fun sendUserMessage(text: String, clearInput: Boolean = false) {
         if (text.isEmpty() || localState.value.isExecuting || localState.value.awaitingApproval) return
 
+        lastUserTask = text
         chatJob?.cancel()
         AgentRunController.beginRun()
         chatJob = viewModelScope.launch {
@@ -592,6 +701,7 @@ class HomeViewModel(
                     chatError = null,
                     awaitingApproval = false,
                     pendingPlan = null,
+                    skillSaveOffer = null,
                     swarmResponse = SwarmResponse(
                         messageId = assistantId,
                         phase = SwarmPhase.PLANNING,

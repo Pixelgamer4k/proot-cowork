@@ -43,12 +43,16 @@ import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.MessageRole
 import com.proot.cowork.domain.agent.ShellCommandLogEntry
 import com.proot.cowork.domain.agent.SwarmResponse
+import com.proot.cowork.domain.skills.PendingSkillWrite
+import com.proot.cowork.domain.skills.SkillSaveOffer
 import com.proot.cowork.ui.agent.ToolMessageBubble
 import com.proot.cowork.ui.agent.swarm.ShellCommandLogCard
 import com.proot.cowork.ui.agent.swarm.SwarmMessageItem
 import com.proot.cowork.ui.agent.swarm.ToolCallLimitBar
 import com.proot.cowork.ui.chat.ChatMessageBubble
 import com.proot.cowork.ui.design.CoworkTokens
+import com.proot.cowork.ui.skills.SkillApprovalCard
+import com.proot.cowork.ui.skills.SkillSaveOfferCard
 
 private val QUICK_PROMPTS = listOf(
     "Create a React project",
@@ -68,6 +72,8 @@ fun ChatTabContent(
     maxToolCalls: Int,
     toolLimitReached: Boolean,
     shellCommandLog: List<ShellCommandLogEntry>,
+    pendingSkillWrite: PendingSkillWrite?,
+    skillSaveOffer: SkillSaveOffer?,
     composerBottomPadding: Dp,
     onQuickPrompt: (String) -> Unit,
     onUpdateSwarmTask: (String, String) -> Unit,
@@ -80,6 +86,10 @@ fun ChatTabContent(
     onMessageCopied: () -> Unit,
     onEditUserMessage: (String, String) -> Unit,
     onRegenerateFrom: (String) -> Unit,
+    onApproveSkillWrite: () -> Unit,
+    onRejectSkillWrite: () -> Unit,
+    onAcceptSkillSaveOffer: () -> Unit,
+    onDismissSkillSaveOffer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -87,9 +97,9 @@ fun ChatTabContent(
         isEmbeddedInSwarm(msg, swarmResponse, messages)
     }
 
-    LaunchedEffect(visibleMessages.size, isExecuting, awaitingApproval, swarmResponse?.phase) {
-        if (visibleMessages.isNotEmpty() || isExecuting || awaitingApproval) {
-            listState.animateScrollToItem((visibleMessages.size - 1).coerceAtLeast(0))
+    LaunchedEffect(visibleMessages.size, isExecuting, awaitingApproval, swarmResponse?.phase, pendingSkillWrite?.id, skillSaveOffer?.skillId) {
+        if (visibleMessages.isNotEmpty() || isExecuting || awaitingApproval || pendingSkillWrite != null || skillSaveOffer != null) {
+            listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
         }
     }
 
@@ -226,6 +236,28 @@ fun ChatTabContent(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+            }
+        }
+
+        if (pendingSkillWrite != null) {
+            item(key = "skill-approval-${pendingSkillWrite.id}") {
+                SkillApprovalCard(
+                    pending = pendingSkillWrite,
+                    onApprove = onApproveSkillWrite,
+                    onReject = onRejectSkillWrite,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        if (skillSaveOffer != null) {
+            item(key = "skill-save-${skillSaveOffer.skillId}") {
+                SkillSaveOfferCard(
+                    offer = skillSaveOffer,
+                    onSave = onAcceptSkillSaveOffer,
+                    onDismiss = onDismissSkillSaveOffer,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 

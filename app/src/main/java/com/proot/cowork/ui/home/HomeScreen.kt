@@ -180,6 +180,8 @@ fun HomeScreen(
                         maxToolCalls = uiState.maxToolCalls,
                         toolLimitReached = uiState.toolLimitReached,
                         shellCommandLog = uiState.shellCommandLog,
+                        pendingSkillWrite = uiState.pendingSkillWrite,
+                        skillSaveOffer = uiState.skillSaveOffer,
                         composerBottomPadding = if (showChatComposer) composerBottomPadding + 8.dp else 0.dp,
                         onQuickPrompt = viewModel::onQuickPrompt,
                         onUpdateSwarmTask = viewModel::onUpdateSwarmTask,
@@ -192,13 +194,21 @@ fun HomeScreen(
                         onMessageCopied = viewModel::onMessageCopied,
                         onEditUserMessage = viewModel::onEditUserMessage,
                         onRegenerateFrom = viewModel::onRegenerateFrom,
+                        onApproveSkillWrite = viewModel::onApproveSkillWrite,
+                        onRejectSkillWrite = viewModel::onRejectSkillWrite,
+                        onAcceptSkillSaveOffer = viewModel::onAcceptSkillSaveOffer,
+                        onDismissSkillSaveOffer = viewModel::onDismissSkillSaveOffer,
                     )
                     CoworkTab.Agents -> AgentsTabContent(
                         agentStates = uiState.agentStates,
                         isExecuting = uiState.isExecuting,
                         maxAgentPool = uiState.maxAgentPool,
                     )
-                    CoworkTab.Skills -> SkillsTabContent(skillsDirLabel = settingsRepository.getSkillsDir().absolutePath)
+                    CoworkTab.Skills -> SkillsTabContent(
+                        skills = uiState.skills,
+                        skillsDirLabel = settingsRepository.getSkillsDir().absolutePath,
+                        onToggleSkill = viewModel::onToggleSkill,
+                    )
                     CoworkTab.Schedule -> ScheduleTabContent(onScheduleDraft = viewModel::onScheduleDraft)
                     CoworkTab.Files -> FilesTabContent(
                         artifactsDir = settingsRepository.getArtifactsDir(),

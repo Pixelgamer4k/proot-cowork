@@ -14,14 +14,15 @@ object ProotGuestTerminalController {
 
     private var session: TerminalSession? = null
 
-    fun attach(terminalView: TerminalView, context: Context): Boolean {
+    fun attach(terminalView: TerminalView, context: Context, client: CoworkTerminalViewClient? = null): Boolean {
         TerminalKeyboard.setup(terminalView)
         if (session?.isRunning != true) {
             session = null
         }
+        val viewClient = client ?: CoworkTerminalViewClient(terminalView)
         if (session?.isRunning == true) {
             ensureRenderer(terminalView)
-            terminalView.setTerminalViewClient(CoworkTerminalViewClient(terminalView))
+            terminalView.setTerminalViewClient(viewClient)
             terminalView.attachSession(session)
             return true
         }
@@ -31,7 +32,7 @@ object ProotGuestTerminalController {
 
         val bash = TermuxBootstrap.shellExecutable(context) ?: return false
         ensureRenderer(terminalView)
-        terminalView.setTerminalViewClient(CoworkTerminalViewClient(terminalView))
+        terminalView.setTerminalViewClient(viewClient)
 
         if (terminalView.width > 0 && terminalView.height > 0) {
             startSession(terminalView, context, bash, distro)

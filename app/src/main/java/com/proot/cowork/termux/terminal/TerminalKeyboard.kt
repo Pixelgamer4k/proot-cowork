@@ -34,4 +34,17 @@ object TerminalKeyboard {
             imm.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
         }, 100)
     }
+
+    fun hide(view: View) {
+        val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            ?: return
+        imm.hideSoftInputFromWindow(view.windowToken, 0)
+    }
+
+    fun toggle(view: View) {
+        view.requestFocus()
+        val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            ?: return
+        imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT, 0)
+    }
 }

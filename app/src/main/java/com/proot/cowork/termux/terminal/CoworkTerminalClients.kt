@@ -11,6 +11,31 @@ import com.termux.view.TerminalViewClient
 class CoworkTerminalViewClient(
     private val terminalView: TerminalView,
 ) : TerminalViewClient {
+    var ctrlLatched: Boolean = false
+        private set
+    var altLatched: Boolean = false
+        private set
+    var shiftLatched: Boolean = false
+        private set
+
+    fun toggleCtrl() {
+        ctrlLatched = !ctrlLatched
+    }
+
+    fun toggleAlt() {
+        altLatched = !altLatched
+    }
+
+    fun toggleShift() {
+        shiftLatched = !shiftLatched
+    }
+
+    fun clearModifiers() {
+        ctrlLatched = false
+        altLatched = false
+        shiftLatched = false
+    }
+
     override fun onScale(scale: Float): Float = 1.0f
     override fun onSingleTapUp(e: MotionEvent) {
         TerminalKeyboard.focusAndShow(terminalView)
@@ -23,9 +48,9 @@ class CoworkTerminalViewClient(
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean = false
     override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
     override fun onLongPress(event: MotionEvent): Boolean = false
-    override fun readControlKey(): Boolean = false
-    override fun readAltKey(): Boolean = false
-    override fun readShiftKey(): Boolean = false
+    override fun readControlKey(): Boolean = ctrlLatched
+    override fun readAltKey(): Boolean = altLatched
+    override fun readShiftKey(): Boolean = shiftLatched
     override fun readFnKey(): Boolean = false
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean = false
     override fun onEmulatorSet() {}

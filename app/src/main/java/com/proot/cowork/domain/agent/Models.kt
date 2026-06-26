@@ -81,3 +81,20 @@ data class SwarmAgentState(
 )
 
 const val DEFAULT_MAX_AGENT_POOL = 3
+const val DEFAULT_MAX_TOOL_CALLS = 50
+
+enum class ShellCommandStatus {
+    RUNNING,
+    COMPLETED,
+    FAILED,
+    CANCELLED,
+}
+
+data class ShellCommandLogEntry(
+    val id: String,
+    val agentName: String,
+    val command: String,
+    val status: ShellCommandStatus,
+    val exitCode: Int? = null,
+    val timestamp: Long = System.currentTimeMillis(),
+)

@@ -38,6 +38,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -63,6 +64,8 @@ import androidx.compose.ui.unit.sp
 import com.proot.cowork.R
 import com.proot.cowork.domain.agent.FileListingRow
 import com.proot.cowork.domain.agent.PlanStep
+import com.proot.cowork.domain.agent.ShellCommandLogEntry
+import com.proot.cowork.domain.agent.ShellCommandStatus
 import com.proot.cowork.domain.agent.SwarmPhase
 import com.proot.cowork.domain.agent.SwarmResponse
 import com.proot.cowork.domain.agent.SwarmResultType
@@ -90,6 +93,7 @@ fun SwarmMessageItem(
     onUpdateTask: (String, String) -> Unit,
     onApprove: () -> Unit,
     onReject: () -> Unit,
+    onCancelSubtask: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var thinkingExpanded by remember(response.messageId) { mutableStateOf(false) }
@@ -119,6 +123,14 @@ fun SwarmMessageItem(
             )
         }
 
+        if (response.phase == SwarmPhase.EXECUTING || response.toolCallCount > 0) {
+            ToolCallLimitBar(
+                count = response.toolCallCount,
+                max = response.maxToolCalls,
+                limitReached = response.toolLimitReached,
+            )
+        }
+
         if (response.plan.isNotEmpty() &&
             (response.phase == SwarmPhase.AWAITING_APPROVAL || response.phase == SwarmPhase.EXECUTING)
         ) {
@@ -128,9 +140,11 @@ fun SwarmMessageItem(
                 tasks = response.tasks,
                 editable = editable && response.phase == SwarmPhase.AWAITING_APPROVAL,
                 showActions = response.phase == SwarmPhase.AWAITING_APPROVAL,
+                allowSubtaskCancel = response.phase == SwarmPhase.EXECUTING,
                 onUpdateTask = onUpdateTask,
                 onApprove = onApprove,
                 onReject = onReject,
+                onCancelSubtask = onCancelSubtask,
             )
         }
 
@@ -138,6 +152,15 @@ fun SwarmMessageItem(
             ExecutionStatusRow(
                 current = response.currentStep.coerceAtLeast(1),
                 total = response.totalSteps.coerceAtLeast(response.plan.size).coerceAtLeast(1),
+            )
+        }
+
+        if (response.shellCommandLog.isNotEmpty() &&
+            (response.phase == SwarmPhase.EXECUTING || response.phase == SwarmPhase.COMPLETE)
+        ) {
+            ShellCommandLogCard(
+                entries = response.shellCommandLog,
+                expandedByDefault = response.phase == SwarmPhase.EXECUTING,
             )
         }
 
@@ -165,9 +188,11 @@ fun SwarmPlanCard(
     tasks: List<SwarmTask>,
     editable: Boolean,
     showActions: Boolean,
+    allowSubtaskCancel: Boolean = false,
     onUpdateTask: (String, String) -> Unit,
     onApprove: () -> Unit,
     onReject: () -> Unit,
+    onCancelSubtask: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -218,7 +243,9 @@ fun SwarmPlanCard(
                             step = step,
                             task = task,
                             editable = editable,
+                            allowCancel = allowSubtaskCancel,
                             onUpdateTask = onUpdateTask,
+                            onCancelSubtask = onCancelSubtask,
                         )
                     }
                 }
@@ -272,7 +299,9 @@ private fun PlanStepRow(
     step: PlanStep,
     task: SwarmTask?,
     editable: Boolean,
+    allowCancel: Boolean,
     onUpdateTask: (String, String) -> Unit,
+    onCancelSubtask: (String) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -324,12 +353,28 @@ private fun PlanStepRow(
         }
         if (task?.status == TaskStatus.COMPLETED) {
             Text("✓", color = SwarmStdout, fontSize = 14.sp)
+        } else if (task?.status == TaskStatus.CANCELLED) {
+            Text("✕", color = SwarmStderr, fontSize = 14.sp)
         } else if (task?.status == TaskStatus.RUNNING) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(14.dp),
-                strokeWidth = 2.dp,
-                color = SwarmAccent,
-            )
+            if (allowCancel && task != null) {
+                IconButton(
+                    onClick = { onCancelSubtask(task.id) },
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.swarm_cancel_step),
+                        tint = SwarmStderr,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            } else {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp,
+                    color = SwarmAccent,
+                )
+            }
         }
     }
 }
@@ -393,6 +438,154 @@ fun AgentThinkingPill(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ToolCallLimitBar(
+    count: Int,
+    max: Int,
+    limitReached: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val progress = (count.toFloat() / max.coerceAtLeast(1)).coerceIn(0f, 1f)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(SwarmSurfaceAlt)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                text = stringResource(R.string.tool_calls_progress, count, max),
+                color = if (limitReached) SwarmStderr else SwarmTextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            if (limitReached) {
+                Text(
+                    text = stringResource(R.string.tool_limit_reached, max),
+                    color = SwarmStderr,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp)),
+            color = if (limitReached) SwarmStderr else SwarmAccent,
+            trackColor = SwarmBorder,
+        )
+    }
+}
+
+@Composable
+fun ShellCommandLogCard(
+    entries: List<ShellCommandLogEntry>,
+    expandedByDefault: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember(entries.size, expandedByDefault) { mutableStateOf(expandedByDefault) }
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(entries.size) {
+        if (expanded && entries.isNotEmpty()) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, SwarmBorder, RoundedCornerShape(12.dp))
+            .background(SwarmTerminalBg),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "🔧 ${stringResource(R.string.shell_command_log_title)}",
+                color = SwarmAccent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "${entries.size}",
+                color = SwarmTextSecondary,
+                fontSize = 11.sp,
+            )
+        }
+
+        if (!expanded) {
+            TextButton(onClick = { expanded = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text(stringResource(R.string.shell_command_show_log), color = SwarmTextSecondary, fontSize = 12.sp)
+            }
+        } else {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 200.dp)
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                entries.takeLast(30).forEach { entry ->
+                    ShellCommandLogLine(entry)
+                }
+            }
+            TextButton(onClick = { expanded = false }, modifier = Modifier.align(Alignment.End)) {
+                Text(stringResource(R.string.shell_command_hide_log), color = SwarmTextSecondary, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShellCommandLogLine(entry: ShellCommandLogEntry) {
+    val statusColor = when (entry.status) {
+        ShellCommandStatus.RUNNING -> SwarmAccent
+        ShellCommandStatus.COMPLETED -> SwarmStdout
+        ShellCommandStatus.FAILED -> SwarmStderr
+        ShellCommandStatus.CANCELLED -> SwarmTextSecondary
+    }
+    val statusLabel = when (entry.status) {
+        ShellCommandStatus.RUNNING -> stringResource(R.string.shell_command_running)
+        ShellCommandStatus.COMPLETED -> entry.exitCode?.let { "exit $it" } ?: "done"
+        ShellCommandStatus.FAILED -> entry.exitCode?.let { "exit $it" } ?: "failed"
+        ShellCommandStatus.CANCELLED -> "cancelled"
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(SwarmSurfaceAlt.copy(alpha = 0.6f))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        Text(
+            text = "${entry.agentName} · $statusLabel",
+            color = statusColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Text(
+            text = "$ ${entry.command}",
+            color = if (entry.status == ShellCommandStatus.RUNNING) Color.White else SwarmStdout,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

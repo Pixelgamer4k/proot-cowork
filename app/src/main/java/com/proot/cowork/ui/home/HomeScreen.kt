@@ -143,11 +143,16 @@ fun HomeScreen(
                         isExecuting = uiState.isExecuting,
                         isApiConfigured = uiState.isApiConfigured,
                         awaitingApproval = uiState.awaitingApproval,
+                        toolCallCount = uiState.toolCallCount,
+                        maxToolCalls = uiState.maxToolCalls,
+                        toolLimitReached = uiState.toolLimitReached,
+                        shellCommandLog = uiState.shellCommandLog,
                         composerBottomPadding = if (showChatComposer) composerBottomPadding + 8.dp else 0.dp,
                         onQuickPrompt = viewModel::onQuickPrompt,
                         onUpdateSwarmTask = viewModel::onUpdateSwarmTask,
                         onApprovePlan = viewModel::onApprovePlan,
                         onRejectPlan = viewModel::onRejectPlan,
+                        onCancelSubtask = viewModel::onCancelSubtask,
                     )
                     CoworkTab.Agents -> AgentsTabContent(
                         agentStates = uiState.agentStates,

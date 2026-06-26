@@ -34,9 +34,12 @@ import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.MessageRole
+import com.proot.cowork.domain.agent.ShellCommandLogEntry
 import com.proot.cowork.domain.agent.SwarmResponse
 import com.proot.cowork.ui.agent.ToolMessageBubble
+import com.proot.cowork.ui.agent.swarm.ShellCommandLogCard
 import com.proot.cowork.ui.agent.swarm.SwarmMessageItem
+import com.proot.cowork.ui.agent.swarm.ToolCallLimitBar
 import com.proot.cowork.ui.design.CoworkTokens
 
 private val QUICK_PROMPTS = listOf(
@@ -53,11 +56,16 @@ fun ChatTabContent(
     isExecuting: Boolean,
     isApiConfigured: Boolean,
     awaitingApproval: Boolean,
+    toolCallCount: Int,
+    maxToolCalls: Int,
+    toolLimitReached: Boolean,
+    shellCommandLog: List<ShellCommandLogEntry>,
     composerBottomPadding: Dp,
     onQuickPrompt: (String) -> Unit,
     onUpdateSwarmTask: (String, String) -> Unit,
     onApprovePlan: () -> Unit,
     onRejectPlan: () -> Unit,
+    onCancelSubtask: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -146,6 +154,7 @@ fun ChatTabContent(
                         onUpdateTask = onUpdateSwarmTask,
                         onApprove = onApprovePlan,
                         onReject = onRejectPlan,
+                        onCancelSubtask = onCancelSubtask,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -157,22 +166,39 @@ fun ChatTabContent(
         }
 
         if (isExecuting && swarmResponse == null) {
-            item(key = "typing") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    repeat(3) { i ->
-                        Box(
-                            Modifier
-                                .padding(end = 4.dp)
-                                .size(6.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(CoworkTokens.Mint.copy(alpha = 0.3f + i * 0.2f)),
-                        )
-                    }
-                    Text(
-                        stringResource(R.string.agent_working),
-                        color = CoworkTokens.TextMuted,
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            item(key = "fast-execution-hud") {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ToolCallLimitBar(
+                        count = toolCallCount,
+                        max = maxToolCalls,
+                        limitReached = toolLimitReached,
                     )
+                    if (shellCommandLog.isNotEmpty()) {
+                        ShellCommandLogCard(
+                            entries = shellCommandLog,
+                            expandedByDefault = true,
+                        )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            repeat(3) { i ->
+                                Box(
+                                    Modifier
+                                        .padding(end = 4.dp)
+                                        .size(6.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(CoworkTokens.Mint.copy(alpha = 0.3f + i * 0.2f)),
+                                )
+                            }
+                            Text(
+                                stringResource(R.string.agent_working),
+                                color = CoworkTokens.TextMuted,
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                 }
             }
         }

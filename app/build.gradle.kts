@@ -12,8 +12,8 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 63
-        versionName = "0.14.3-swarm-chat-ui"
+        versionName = "0.15.0-agent-control"
+        versionCode = 64
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

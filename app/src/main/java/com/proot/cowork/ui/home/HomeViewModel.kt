@@ -16,7 +16,9 @@ import com.proot.cowork.domain.agent.CoworkAgentRunner
 import com.proot.cowork.domain.agent.DEFAULT_MAX_AGENT_POOL
 import com.proot.cowork.domain.agent.ExecutionMode
 import com.proot.cowork.domain.agent.MessageRole
-import com.proot.cowork.domain.agent.SwarmAgentState
+import com.proot.cowork.domain.agent.AgentRunController
+import com.proot.cowork.domain.agent.DEFAULT_MAX_TOOL_CALLS
+import com.proot.cowork.domain.agent.ShellCommandLogEntry
 import com.proot.cowork.domain.agent.SwarmAgentType
 import com.proot.cowork.domain.agent.PlanStep
 import com.proot.cowork.domain.agent.SwarmOutputParser
@@ -64,6 +66,11 @@ data class HomeUiState(
     val isApiConfigured: Boolean = false,
     val chatError: String? = null,
     val swarmResponse: SwarmResponse? = null,
+    val toolCallCount: Int = 0,
+    val maxToolCalls: Int = DEFAULT_MAX_TOOL_CALLS,
+    val toolLimitReached: Boolean = false,
+    val shellCommandLog: List<ShellCommandLogEntry> = emptyList(),
+    val cancellationMessage: String? = null,
 )
 
 class HomeViewModel(
@@ -93,12 +100,22 @@ class HomeViewModel(
                         swarmTasks = tasks,
                         agentStates = snap.agentStates,
                         isExecuting = executing,
+                        toolCallCount = snap.toolCallCount,
+                        maxToolCalls = snap.maxToolCalls,
+                        toolLimitReached = snap.toolLimitReached,
+                        shellCommandLog = snap.shellCommandLog,
+                        cancellationMessage = snap.cancellationMessage,
                         swarmResponse = refreshSwarmResponse(
                             existing = local.swarmResponse,
                             messages = mergedMessages,
                             tasks = tasks,
                             isExecuting = executing,
                             awaitingApproval = local.awaitingApproval,
+                            toolCallCount = snap.toolCallCount,
+                            maxToolCalls = snap.maxToolCalls,
+                            toolLimitReached = snap.toolLimitReached,
+                            shellCommandLog = snap.shellCommandLog,
+                            cancellationMessage = snap.cancellationMessage,
                         ),
                     )
                 }
@@ -164,6 +181,11 @@ class HomeViewModel(
         tasks: List<SwarmTask>,
         isExecuting: Boolean,
         awaitingApproval: Boolean,
+        toolCallCount: Int,
+        maxToolCalls: Int,
+        toolLimitReached: Boolean,
+        shellCommandLog: List<ShellCommandLogEntry>,
+        cancellationMessage: String?,
     ): SwarmResponse? {
         val base = existing ?: return null
         val activeTasks = tasks.ifEmpty { base.tasks }
@@ -177,12 +199,15 @@ class HomeViewModel(
         }
         val completedCount = activeTasks.count { it.status == TaskStatus.COMPLETED }
         val runningCount = activeTasks.count { it.status == TaskStatus.RUNNING }
+        val cancelledCount = activeTasks.count { it.status == TaskStatus.CANCELLED }
         val phase = when {
             awaitingApproval -> SwarmPhase.AWAITING_APPROVAL
             isExecuting -> SwarmPhase.EXECUTING
             base.phase == SwarmPhase.PLANNING -> SwarmPhase.PLANNING
+            toolLimitReached || cancellationMessage != null -> SwarmPhase.COMPLETE
             completedCount > 0 || toolMsgs.isNotEmpty() || parsed.resultType != SwarmResultType.NONE ->
                 SwarmPhase.COMPLETE
+            cancelledCount > 0 -> SwarmPhase.COMPLETE
             else -> base.phase
         }
         val showResults = phase == SwarmPhase.COMPLETE
@@ -194,12 +219,21 @@ class HomeViewModel(
             terminalOutputs = parsed.terminals,
             fileRows = if (showResults) parsed.fileRows else emptyList(),
             summaryChips = if (showResults) parsed.chips else emptyList(),
-            narrativeSummary = if (showResults) parsed.narrative else null,
+            narrativeSummary = when {
+                toolLimitReached -> "Tool call limit ($maxToolCalls) reached."
+                cancellationMessage != null -> cancellationMessage
+                showResults -> parsed.narrative
+                else -> null
+            },
             resultType = if (showResults) parsed.resultType else SwarmResultType.NONE,
             currentStep = (completedCount + if (runningCount > 0) 1 else 0).coerceAtLeast(
                 if (phase == SwarmPhase.EXECUTING) 1 else 0,
             ),
             totalSteps = activeTasks.size.coerceAtLeast(base.totalSteps),
+            toolCallCount = toolCallCount,
+            maxToolCalls = maxToolCalls,
+            toolLimitReached = toolLimitReached,
+            shellCommandLog = shellCommandLog,
         )
     }
 
@@ -311,11 +345,63 @@ class HomeViewModel(
     }
 
     fun onStop() {
+        AgentRunController.requestStop()
         chatJob?.cancel()
         chatJob = null
         AgentExecutionService.stop(application)
-        AgentExecutionSession.setRunning(false)
-        localState.update { it.copy(isExecuting = false) }
+        AgentExecutionSession.onStopRequested()
+        AgentExecutionSession.markRunningShellCommandsCancelled()
+        localState.update { state ->
+            val swarmId = state.swarmResponse?.messageId
+            state.copy(
+                isExecuting = false,
+                awaitingApproval = false,
+                pendingPlan = null,
+                swarmTasks = state.swarmTasks.map { task ->
+                    if (task.status == TaskStatus.RUNNING || task.status == TaskStatus.PENDING) {
+                        task.copy(status = TaskStatus.CANCELLED)
+                    } else {
+                        task
+                    }
+                },
+                swarmResponse = state.swarmResponse?.copy(
+                    phase = SwarmPhase.COMPLETE,
+                    tasks = state.swarmResponse.tasks.map { task ->
+                        if (task.status == TaskStatus.RUNNING || task.status == TaskStatus.PENDING) {
+                            task.copy(status = TaskStatus.CANCELLED)
+                        } else {
+                            task
+                        }
+                    },
+                    narrativeSummary = "Run stopped.",
+                ),
+                messages = if (swarmId != null && state.isExecuting) {
+                    state.messages + AgentMessage(
+                        id = UUID.randomUUID().toString(),
+                        role = MessageRole.SYSTEM,
+                        content = "Agent run stopped.",
+                    )
+                } else {
+                    state.messages
+                },
+            )
+        }
+    }
+
+    fun onCancelSubtask(taskId: String) {
+        AgentExecutionService.cancelSubtask(application, taskId)
+        localState.update { state ->
+            state.copy(
+                swarmTasks = state.swarmTasks.map { task ->
+                    if (task.id == taskId) task.copy(status = TaskStatus.CANCELLED) else task
+                },
+                swarmResponse = state.swarmResponse?.copy(
+                    tasks = state.swarmResponse.tasks.map { task ->
+                        if (task.id == taskId) task.copy(status = TaskStatus.CANCELLED) else task
+                    },
+                ),
+            )
+        }
     }
 
     fun onSend() {
@@ -323,6 +409,7 @@ class HomeViewModel(
         if (text.isEmpty() || localState.value.isExecuting || localState.value.awaitingApproval) return
 
         chatJob?.cancel()
+        AgentRunController.beginRun()
         chatJob = viewModelScope.launch {
             val config = settingsRepository.llmConfig.first()
             if (!LlmEndpoint.isConfigured(config)) {
@@ -371,7 +458,7 @@ class HomeViewModel(
                             config = config,
                             userTask = text,
                             history = history + userMsg,
-                            isActive = { chatJob?.isActive == true },
+                            isActive = { chatJob?.isActive == true && AgentRunController.isActive() },
                         )
                         AgentExecutionSession.setAwaitingApproval(plan)
                         localState.update {
@@ -396,6 +483,14 @@ class HomeViewModel(
                         AgentExecutionService.startFast(application, text, historyForRun)
                         localState.update { it.copy(isExecuting = true) }
                     }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                localState.update { state ->
+                    state.copy(
+                        isExecuting = false,
+                        swarmResponse = null,
+                        messages = state.messages.filterNot { it.id == assistantId },
+                    )
                 }
             } catch (e: Exception) {
                 localState.update { state ->

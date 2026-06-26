@@ -56,6 +56,10 @@ data class SwarmResponse(
     val narrativeSummary: String? = null,
     val currentStep: Int = 0,
     val totalSteps: Int = 0,
+    val toolCallCount: Int = 0,
+    val maxToolCalls: Int = DEFAULT_MAX_TOOL_CALLS,
+    val toolLimitReached: Boolean = false,
+    val shellCommandLog: List<ShellCommandLogEntry> = emptyList(),
 ) {
     val activeAgentCount: Int
         get() = tasks.count { it.status == TaskStatus.RUNNING }.coerceAtLeast(

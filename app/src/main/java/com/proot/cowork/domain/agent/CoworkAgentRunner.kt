@@ -6,6 +6,9 @@ import com.proot.cowork.data.llm.LlmToolCall
 import com.proot.cowork.data.llm.OpenAiCompatibleLlmClient
 import com.proot.cowork.data.prefs.LlmConfig
 import com.proot.cowork.domain.agent.tools.AgentToolRegistry
+import com.proot.cowork.domain.agent.tools.CodeTool
+import com.proot.cowork.domain.agent.tools.FileSystemTool
+import com.proot.cowork.domain.agent.tools.ProotShellTool
 import com.proot.cowork.domain.agent.tools.ToolInvocation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -16,6 +19,8 @@ import kotlinx.coroutines.sync.withPermit
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+
+class ToolLimitReachedException : CancellationException("Tool call limit reached")
 
 class CoworkAgentRunner(private val context: Context) {
 
@@ -28,6 +33,7 @@ class CoworkAgentRunner(private val context: Context) {
         isActive: () -> Boolean,
     ): TaskPlan {
         require(LlmEndpoint.isConfigured(config))
+        if (!isActive()) throw CancellationException("Planning cancelled")
         val system = """
             You are the Cowork Swarm Planner. Reply with ONLY one JSON object, no markdown, no prose.
             Schema:
@@ -40,6 +46,7 @@ class CoworkAgentRunner(private val context: Context) {
         """.trimIndent()
         val messages = OpenAiCompatibleLlmClient.buildMessagesArray(system, history, userTask)
         val result = OpenAiCompatibleLlmClient.complete(config, messages, temperature = 0.2)
+        if (!isActive()) throw CancellationException("Planning cancelled")
         return parsePlanJson(result.content, userTask)
     }
 
@@ -94,11 +101,28 @@ class CoworkAgentRunner(private val context: Context) {
 
         fun publishAgents() = onAgentStates(agentStates.values.toList())
 
+        fun markTaskCancelled(taskId: String) {
+            tasks = tasks.map { task ->
+                if (task.id == taskId && task.status != TaskStatus.COMPLETED) {
+                    task.copy(status = TaskStatus.CANCELLED)
+                } else {
+                    task
+                }
+            }
+            onSubtaskUpdate(tasks)
+        }
+
         val results = tasks.map { task ->
             async {
-                if (!isActive()) return@async task.id to "Cancelled"
+                if (!isActive() || AgentRunController.isSubtaskCancelled(task.id)) {
+                    markTaskCancelled(task.id)
+                    return@async task.id to "Cancelled"
+                }
                 semaphore.withPermit {
-                    if (!isActive()) return@withPermit task.id to "Cancelled"
+                    if (!isActive() || AgentRunController.isSubtaskCancelled(task.id)) {
+                        markTaskCancelled(task.id)
+                        return@withPermit task.id to "Cancelled"
+                    }
                     tasks = tasks.map { if (it.id == task.id) it.copy(status = TaskStatus.RUNNING) else it }
                     onSubtaskUpdate(tasks)
                     agentStates[task.agent] = agentStates[task.agent]!!.copy(
@@ -108,16 +132,32 @@ class CoworkAgentRunner(private val context: Context) {
                     publishAgents()
                     AgentExecutionSession.setNotification("${task.agent.displayName}: ${task.title.take(40)}")
 
-                    val summary = runToolLoop(
-                        config = config,
-                        agent = task.agent,
-                        systemPrompt = agentSystemPrompt(task.agent),
-                        history = history,
-                        userMessage = "Swarm step ${task.id}: ${task.title}\nOriginal task: ${plan.userTask}",
-                        isActive = isActive,
-                        onAssistantDelta = {},
-                        onToolEvent = onToolEvent,
-                    )
+                    val summary = try {
+                        runToolLoop(
+                            config = config,
+                            agent = task.agent,
+                            systemPrompt = agentSystemPrompt(task.agent),
+                            history = history,
+                            userMessage = "Swarm step ${task.id}: ${task.title}\nOriginal task: ${plan.userTask}",
+                            isActive = isActive,
+                            subtaskId = task.id,
+                            onAssistantDelta = {},
+                            onToolEvent = onToolEvent,
+                        )
+                    } catch (e: CancellationException) {
+                        markTaskCancelled(task.id)
+                        agentStates[task.agent] = agentStates[task.agent]!!.copy(
+                            status = TaskStatus.CANCELLED,
+                            currentTask = null,
+                        )
+                        publishAgents()
+                        return@withPermit task.id to "Cancelled"
+                    }
+
+                    if (AgentRunController.isSubtaskCancelled(task.id)) {
+                        markTaskCancelled(task.id)
+                        return@withPermit task.id to "Cancelled"
+                    }
 
                     tasks = tasks.map {
                         if (it.id == task.id) it.copy(status = TaskStatus.COMPLETED) else it
@@ -135,8 +175,14 @@ class CoworkAgentRunner(private val context: Context) {
             }
         }.awaitAll()
 
+        val cancelled = tasks.any { it.status == TaskStatus.CANCELLED }
+        val limitHit = AgentExecutionSession.isToolLimitReached()
         val report = buildString {
-            appendLine("Swarm execution complete.")
+            when {
+                limitHit -> appendLine("Swarm stopped: tool call limit (${AgentExecutionSession.snapshot.value.maxToolCalls}) reached.")
+                cancelled -> appendLine("Swarm run cancelled.")
+                else -> appendLine("Swarm execution complete.")
+            }
             appendLine(plan.summary)
             results.forEach { (id, text) ->
                 appendLine()
@@ -157,15 +203,18 @@ class CoworkAgentRunner(private val context: Context) {
         isActive: () -> Boolean,
         onAssistantDelta: (String) -> Unit,
         onToolEvent: (AgentMessage) -> Unit,
-        maxIterations: Int = 12,
+        subtaskId: String? = null,
     ): String {
         val apiMessages = OpenAiCompatibleLlmClient.buildMessagesArray(systemPrompt, history, userMessage)
         val agentTools = tools.toolsForAgent(agent)
         var lastContent = ""
-
         var lastEmitted = 0
-        repeat(maxIterations) {
-            if (!isActive()) throw CancellationException("Agent stopped")
+        val maxRounds = AgentExecutionSession.snapshot.value.maxToolCalls.coerceAtLeast(1)
+
+        repeat(maxRounds) {
+            ensureActive(isActive, subtaskId)
+            if (AgentExecutionSession.isToolLimitReached()) throw ToolLimitReachedException()
+
             val result = OpenAiCompatibleLlmClient.complete(
                 config = config,
                 messages = apiMessages,
@@ -187,6 +236,11 @@ class CoworkAgentRunner(private val context: Context) {
 
             apiMessages.put(OpenAiCompatibleLlmClient.assistantToolCallMessage(result.toolCalls))
             result.toolCalls.forEach { call ->
+                ensureActive(isActive, subtaskId)
+                if (!AgentExecutionSession.tryRecordToolCall()) {
+                    AgentRunController.requestStop()
+                    throw ToolLimitReachedException()
+                }
                 executeToolCall(call, agent, onToolEvent) { toolMsg ->
                     apiMessages.put(
                         JSONObject()
@@ -200,12 +254,23 @@ class CoworkAgentRunner(private val context: Context) {
         return lastContent.ifBlank { "Agent reached max tool iterations." }
     }
 
+    private fun ensureActive(isActive: () -> Boolean, subtaskId: String?) {
+        if (!isActive() || AgentRunController.isSubtaskCancelled(subtaskId)) {
+            throw CancellationException("Agent stopped")
+        }
+    }
+
     private suspend fun executeToolCall(
         call: LlmToolCall,
         agent: SwarmAgentType,
         onToolEvent: (AgentMessage) -> Unit,
         onResult: (AgentMessage) -> Unit,
     ) {
+        val shellCommand = extractShellCommand(call.name, call.arguments)
+        val shellLogId = shellCommand?.let {
+            AgentExecutionSession.beginShellCommand(agent.displayName, it)
+        }
+
         val runningId = AgentExecutionSession.newMessageId()
         onToolEvent(
             AgentMessage(
@@ -221,6 +286,19 @@ class CoworkAgentRunner(private val context: Context) {
         val output = runCatching {
             tools.execute(ToolInvocation(call.name, JSONObject(call.arguments)))
         }.getOrElse { "Tool error: ${it.message}" }
+
+        val cancelled = output.contains("Cancelled by user", ignoreCase = true)
+        val failed = output.startsWith("Error") || output.startsWith("Tool error")
+        shellLogId?.let { logId ->
+            val status = when {
+                cancelled -> ShellCommandStatus.CANCELLED
+                failed -> ShellCommandStatus.FAILED
+                else -> ShellCommandStatus.COMPLETED
+            }
+            val exitCode = Regex("""exit\s+(-?\d+)""").find(output)?.groupValues?.get(1)?.toIntOrNull()
+            AgentExecutionSession.completeShellCommand(logId, status, exitCode)
+        }
+
         val done = AgentMessage(
             id = runningId,
             role = MessageRole.TOOL,
@@ -228,10 +306,28 @@ class CoworkAgentRunner(private val context: Context) {
             toolName = call.name,
             toolCallId = call.id,
             agentName = agent.displayName,
-            toolStatus = if (output.startsWith("Error")) ToolCallStatus.FAILED else ToolCallStatus.COMPLETED,
+            toolStatus = when {
+                cancelled -> ToolCallStatus.FAILED
+                failed -> ToolCallStatus.FAILED
+                else -> ToolCallStatus.COMPLETED
+            },
         )
         onToolEvent(done)
         onResult(done)
+    }
+
+    private fun extractShellCommand(toolName: String, argsJson: String): String? {
+        val args = runCatching { JSONObject(argsJson) }.getOrNull() ?: return null
+        return when (toolName) {
+            ProotShellTool.NAME -> args.optString("command").trim().takeIf { it.isNotEmpty() }
+            CodeTool.NAME -> {
+                val test = args.optString("test_command").trim()
+                if (test.isNotEmpty()) test else "edit ${args.optString("path")}"
+            }
+            FileSystemTool.NAME_READ -> "cat ${args.optString("path")}"
+            FileSystemTool.NAME_WRITE -> "write ${args.optString("path")}"
+            else -> null
+        }
     }
 
     private fun agentSystemPrompt(agent: SwarmAgentType): String = when (agent) {
@@ -335,7 +431,6 @@ object CoworkKoogAgentRunner {
         isActive: () -> Boolean,
         onDelta: (String) -> Unit,
     ): String {
-        // Simple chat without tools when called directly (fallback).
         val system = when (mode) {
             ExecutionMode.SWARM -> "You are Cowork Swarm planner. Produce a numbered plan."
             ExecutionMode.FAST -> "You are Cowork Fast agent. Respond concisely."

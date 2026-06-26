@@ -2,15 +2,15 @@ package com.proot.cowork.data.proot
 
 import android.content.Context
 import com.proot.cowork.data.prootcontainer.ProotContainerValidator
+import com.proot.cowork.domain.agent.AgentRunController
 import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
 import com.proot.cowork.termux.bootstrap.TermuxShellEnvironment
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 data class ShellResult(
     val exitCode: Int,
@@ -32,6 +32,9 @@ class ProotGuestShellExecutor(private val context: Context) {
         distro: String = ProotContainerValidator.DEFAULT_DISTRO,
         timeoutMs: Long = 120_000L,
     ): ShellResult = withContext(Dispatchers.IO) {
+        if (!AgentRunController.isActive()) {
+            return@withContext ShellResult.error("Cancelled by user")
+        }
         if (!ProotContainerValidator.isInstalled(context, distro)) {
             return@withContext ShellResult.error("Ubuntu container not installed")
         }
@@ -48,10 +51,24 @@ class ProotGuestShellExecutor(private val context: Context) {
 
         val result = withTimeoutOrNull(timeoutMs) {
             runCatching {
+                if (!AgentRunController.isActive()) {
+                    return@runCatching ShellResult.error("Cancelled by user")
+                }
                 val process = pb.start()
-                val output = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText() }
-                val code = process.waitFor()
-                ShellResult(exitCode = code, output = output.trim())
+                AgentRunController.registerProcess(process)
+                try {
+                    waitForProcess(process)
+                    if (!AgentRunController.isActive()) {
+                        if (process.isAlive) process.destroyForcibly()
+                        ShellResult.error("Cancelled by user")
+                    } else {
+                        val output = process.inputStream.bufferedReader().use { it.readText() }
+                        ShellResult(exitCode = process.exitValue(), output = output.trim())
+                    }
+                } finally {
+                    AgentRunController.unregisterProcess(process)
+                    if (process.isAlive) process.destroyForcibly()
+                }
             }.getOrElse { ShellResult.error(it.message ?: "Shell failed") }
         } ?: ShellResult.error("Command timed out after ${timeoutMs / 1000}s")
 
@@ -59,6 +76,16 @@ class ProotGuestShellExecutor(private val context: Context) {
         DesktopSession.appendLog(line)
         TermuxStackSession.appendLog(line)
         result
+    }
+
+    private suspend fun waitForProcess(process: Process) {
+        while (process.isAlive) {
+            if (!AgentRunController.isActive()) {
+                process.destroyForcibly()
+                return
+            }
+            delay(100)
+        }
     }
 
     private fun shellQuote(value: String): String =

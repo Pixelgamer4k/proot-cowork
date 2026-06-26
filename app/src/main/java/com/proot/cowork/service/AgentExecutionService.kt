@@ -17,10 +17,13 @@ import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.domain.agent.AgentExecutionSession
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.CoworkAgentRunner
+import com.proot.cowork.domain.agent.AgentRunController
 import com.proot.cowork.domain.agent.DEFAULT_MAX_AGENT_POOL
+import com.proot.cowork.domain.agent.DEFAULT_MAX_TOOL_CALLS
 import com.proot.cowork.domain.agent.ExecutionMode
 import com.proot.cowork.domain.agent.MessageRole
 import com.proot.cowork.domain.agent.TaskPlan
+import com.proot.cowork.domain.agent.ToolLimitReachedException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,11 +51,18 @@ class AgentExecutionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                AgentExecutionSession.onStopRequested()
+                AgentExecutionSession.markRunningShellCommandsCancelled()
                 runJob?.cancel()
-                AgentExecutionSession.setRunning(false)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
+            }
+            ACTION_CANCEL_SUBTASK -> {
+                val taskId = intent.getStringExtra(EXTRA_SUBTASK_ID) ?: return START_NOT_STICKY
+                AgentExecutionSession.cancelSubtask(taskId)
+                updateNotification("Cancelling step $taskId…")
+                return START_STICKY
             }
             ACTION_EXECUTE_SWARM -> {
                 val planJson = intent.getStringExtra(EXTRA_PLAN_JSON) ?: return START_NOT_STICKY
@@ -93,7 +103,7 @@ class AgentExecutionService : Service() {
                     plan = plan,
                     history = history,
                     maxPool = maxPool,
-                    isActive = { runJob?.isActive == true },
+                    isActive = ::isRunActive,
                     onSubtaskUpdate = AgentExecutionSession::updateSwarmTasks,
                     onAgentStates = AgentExecutionSession::updateAgentStates,
                     onAssistantMessage = { text ->
@@ -109,8 +119,24 @@ class AgentExecutionService : Service() {
                         updateNotification("${msg.agentName ?: "Agent"} → ${msg.toolName}")
                     },
                 )
+            } catch (e: ToolLimitReachedException) {
+                AgentExecutionSession.onStopRequested("Tool call limit (${DEFAULT_MAX_TOOL_CALLS}) reached")
+                AgentExecutionSession.appendMessage(
+                    AgentMessage(
+                        AgentExecutionSession.newMessageId(),
+                        MessageRole.SYSTEM,
+                        "Swarm stopped: tool call limit (${DEFAULT_MAX_TOOL_CALLS}) reached.",
+                    ),
+                )
             } catch (e: CancellationException) {
-                AgentExecutionSession.setNotification("Swarm cancelled")
+                AgentExecutionSession.onStopRequested("Swarm cancelled")
+                AgentExecutionSession.appendMessage(
+                    AgentMessage(
+                        AgentExecutionSession.newMessageId(),
+                        MessageRole.SYSTEM,
+                        "Swarm run cancelled.",
+                    ),
+                )
             } catch (e: Exception) {
                 AgentExecutionSession.appendMessage(
                     AgentMessage(
@@ -141,7 +167,7 @@ class AgentExecutionService : Service() {
                     config = config,
                     userTask = task,
                     history = history,
-                    isActive = { runJob?.isActive == true },
+                    isActive = ::isRunActive,
                     onAssistantDelta = { delta ->
                         AgentExecutionSession.updateMessage(assistantId) { it.copy(content = it.content + delta) }
                     },
@@ -152,8 +178,24 @@ class AgentExecutionService : Service() {
                         updateNotification("Fast → ${msg.toolName}")
                     },
                 )
+            } catch (e: ToolLimitReachedException) {
+                AgentExecutionSession.onStopRequested("Tool call limit (${DEFAULT_MAX_TOOL_CALLS}) reached")
+                AgentExecutionSession.appendMessage(
+                    AgentMessage(
+                        AgentExecutionSession.newMessageId(),
+                        MessageRole.SYSTEM,
+                        "Fast run stopped: tool call limit (${DEFAULT_MAX_TOOL_CALLS}) reached.",
+                    ),
+                )
             } catch (e: CancellationException) {
-                AgentExecutionSession.setNotification("Fast agent cancelled")
+                AgentExecutionSession.onStopRequested("Fast agent cancelled")
+                AgentExecutionSession.appendMessage(
+                    AgentMessage(
+                        AgentExecutionSession.newMessageId(),
+                        MessageRole.SYSTEM,
+                        "Fast run cancelled.",
+                    ),
+                )
             } catch (e: Exception) {
                 AgentExecutionSession.appendMessage(
                     AgentMessage(
@@ -169,6 +211,9 @@ class AgentExecutionService : Service() {
             }
         }
     }
+
+    private fun isRunActive(): Boolean =
+        runJob?.isActive == true && AgentRunController.isActive()
 
     private fun beginForeground(text: String) {
         val notification = buildNotification(text)
@@ -212,10 +257,12 @@ class AgentExecutionService : Service() {
         const val ACTION_EXECUTE_SWARM = "com.proot.cowork.action.EXECUTE_SWARM"
         const val ACTION_EXECUTE_FAST = "com.proot.cowork.action.EXECUTE_FAST"
         const val ACTION_STOP = "com.proot.cowork.action.STOP_AGENT"
+        const val ACTION_CANCEL_SUBTASK = "com.proot.cowork.action.CANCEL_SUBTASK"
         const val EXTRA_PLAN_JSON = "plan_json"
         const val EXTRA_USER_TASK = "user_task"
         const val EXTRA_HISTORY_JSON = "history_json"
         const val EXTRA_MAX_POOL = "max_pool"
+        const val EXTRA_SUBTASK_ID = "subtask_id"
         private const val NOTIFICATION_ID = 77
 
         fun startSwarm(context: Context, plan: TaskPlan, history: List<AgentMessage>, maxPool: Int) {
@@ -240,8 +287,18 @@ class AgentExecutionService : Service() {
         }
 
         fun stop(context: Context) {
+            AgentRunController.requestStop()
             context.startService(
                 Intent(context, AgentExecutionService::class.java).setAction(ACTION_STOP),
+            )
+        }
+
+        fun cancelSubtask(context: Context, taskId: String) {
+            context.startService(
+                Intent(context, AgentExecutionService::class.java).apply {
+                    action = ACTION_CANCEL_SUBTASK
+                    putExtra(EXTRA_SUBTASK_ID, taskId)
+                },
             )
         }
 

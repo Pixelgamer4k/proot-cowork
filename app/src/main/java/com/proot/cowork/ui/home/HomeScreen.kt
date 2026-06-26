@@ -48,7 +48,6 @@ import com.proot.cowork.ui.desktop.DesktopPreviewCard
 import com.proot.cowork.ui.tabs.AgentsTabContent
 import com.proot.cowork.ui.tabs.ChatTabContent
 import com.proot.cowork.ui.tabs.FilesTabContent
-import com.proot.cowork.ui.tabs.ScheduleTabContent
 import com.proot.cowork.ui.tabs.SkillsTabContent
 import com.proot.cowork.ui.tabs.TerminalTabContent
 import com.proot.cowork.ui.theme.Motion
@@ -221,13 +220,6 @@ fun HomeScreen(
                         skills = uiState.skills,
                         skillsDirLabel = settingsRepository.getSkillsDir().absolutePath,
                         onToggleSkill = viewModel::onToggleSkill,
-                    )
-                    CoworkTab.Schedule -> ScheduleTabContent(
-                        tasks = uiState.scheduledTasks,
-                        isApiConfigured = uiState.isApiConfigured,
-                        onSchedule = viewModel::onScheduleTask,
-                        onCancel = viewModel::onCancelScheduledTask,
-                        onDelete = viewModel::onDeleteScheduledTask,
                     )
                     CoworkTab.Files -> FilesTabContent(
                         artifacts = uiState.artifacts,

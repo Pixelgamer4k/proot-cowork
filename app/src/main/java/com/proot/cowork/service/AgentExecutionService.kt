@@ -14,7 +14,6 @@ import com.proot.cowork.ProotCoworkApp
 import com.proot.cowork.R
 import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.prefs.SettingsRepository
-import com.proot.cowork.data.schedule.ScheduleRepository
 import com.proot.cowork.domain.agent.AgentExecutionSession
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.CoworkAgentRunner
@@ -75,9 +74,8 @@ class AgentExecutionService : Service() {
             ACTION_EXECUTE_FAST -> {
                 val task = intent.getStringExtra(EXTRA_USER_TASK) ?: return START_NOT_STICKY
                 val historyJson = intent.getStringExtra(EXTRA_HISTORY_JSON).orEmpty()
-                val scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID)
                 beginForeground("Fast agent running…")
-                executeFast(task, parseHistory(historyJson), scheduleId)
+                executeFast(task, parseHistory(historyJson))
             }
         }
         return START_STICKY
@@ -155,7 +153,7 @@ class AgentExecutionService : Service() {
         }
     }
 
-    private fun executeFast(task: String, history: List<AgentMessage>, scheduleId: String? = null) {
+    private fun executeFast(task: String, history: List<AgentMessage>) {
         runJob?.cancel()
         runJob = scope.launch {
             AgentExecutionSession.resetForNewRun(ExecutionMode.FAST)
@@ -164,7 +162,6 @@ class AgentExecutionService : Service() {
             AgentExecutionSession.appendMessage(
                 AgentMessage(assistantId, MessageRole.ASSISTANT, ""),
             )
-            var scheduleSuccess = false
             try {
                 if (!LlmEndpoint.isConfigured(config)) {
                     throw IllegalStateException("API not configured")
@@ -184,7 +181,6 @@ class AgentExecutionService : Service() {
                         updateNotification("Fast → ${msg.toolName}")
                     },
                 )
-                scheduleSuccess = true
             } catch (e: ToolLimitReachedException) {
                 AgentExecutionSession.onStopRequested("Tool call limit (${DEFAULT_MAX_TOOL_CALLS}) reached")
                 AgentExecutionSession.appendMessage(
@@ -205,9 +201,6 @@ class AgentExecutionService : Service() {
                 )
             } catch (e: Exception) {
                 val message = e.message ?: "Fast run failed"
-                if (scheduleId != null) {
-                    ScheduleRepository(applicationContext).markFailed(scheduleId, message)
-                }
                 AgentExecutionSession.appendMessage(
                     AgentMessage(
                         AgentExecutionSession.newMessageId(),
@@ -216,22 +209,6 @@ class AgentExecutionService : Service() {
                     ),
                 )
             } finally {
-                if (scheduleId != null) {
-                    val repo = ScheduleRepository(applicationContext)
-                    if (scheduleSuccess) {
-                        repo.markDone(scheduleId)
-                    } else {
-                        val existing = repo.getById(scheduleId)
-                        if (existing?.status != com.proot.cowork.domain.schedule.ScheduleStatus.FAILED &&
-                            existing?.status != com.proot.cowork.domain.schedule.ScheduleStatus.DONE
-                        ) {
-                            repo.markFailed(
-                                scheduleId,
-                                AgentExecutionSession.snapshot.value.cancellationMessage ?: "Scheduled run failed",
-                            )
-                        }
-                    }
-                }
                 AgentExecutionSession.setRunning(false)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -290,7 +267,6 @@ class AgentExecutionService : Service() {
         const val EXTRA_HISTORY_JSON = "history_json"
         const val EXTRA_MAX_POOL = "max_pool"
         const val EXTRA_SUBTASK_ID = "subtask_id"
-        const val EXTRA_SCHEDULE_ID = "schedule_id"
         private const val NOTIFICATION_ID = 77
 
         fun startSwarm(context: Context, plan: TaskPlan, history: List<AgentMessage>, maxPool: Int) {
@@ -310,17 +286,6 @@ class AgentExecutionService : Service() {
                     action = ACTION_EXECUTE_FAST
                     putExtra(EXTRA_USER_TASK, task)
                     putExtra(EXTRA_HISTORY_JSON, historyToJson(history).toString())
-                },
-            )
-        }
-
-        fun startFastScheduled(context: Context, task: String, scheduleId: String) {
-            context.startForegroundService(
-                Intent(context, AgentExecutionService::class.java).apply {
-                    action = ACTION_EXECUTE_FAST
-                    putExtra(EXTRA_USER_TASK, task)
-                    putExtra(EXTRA_HISTORY_JSON, "[]")
-                    putExtra(EXTRA_SCHEDULE_ID, scheduleId)
                 },
             )
         }

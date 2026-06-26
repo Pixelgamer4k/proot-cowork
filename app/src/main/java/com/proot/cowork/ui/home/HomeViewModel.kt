@@ -9,8 +9,6 @@ import com.proot.cowork.data.chat.ChatHistoryStore
 import com.proot.cowork.data.chat.ChatTranscriptExporter
 import com.proot.cowork.data.files.ArtifactEntry
 import com.proot.cowork.data.files.ArtifactsRepository
-import com.proot.cowork.data.schedule.ScheduleRepository
-import com.proot.cowork.data.schedule.ScheduleWorkScheduler
 import com.proot.cowork.data.skills.SkillRepository
 import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.prefs.SettingsRepository
@@ -43,7 +41,6 @@ import com.proot.cowork.domain.importing.ImportSession
 import com.proot.cowork.domain.importing.ImportUiState
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
-import com.proot.cowork.domain.schedule.ScheduledTask
 import com.proot.cowork.domain.skills.PendingSkillWrite
 import com.proot.cowork.domain.skills.SkillApprovalSession
 import com.proot.cowork.domain.skills.SkillDefinition
@@ -94,7 +91,6 @@ data class HomeUiState(
     val skills: List<SkillDefinition> = emptyList(),
     val pendingSkillWrite: PendingSkillWrite? = null,
     val skillSaveOffer: SkillSaveOffer? = null,
-    val scheduledTasks: List<ScheduledTask> = emptyList(),
     val artifacts: List<ArtifactEntry> = emptyList(),
     val shareArtifactUri: Uri? = null,
     val containerInstalled: Boolean = false,
@@ -111,7 +107,6 @@ class HomeViewModel(
     private val chatHistoryStore = ChatHistoryStore(application)
     private val transcriptExporter = ChatTranscriptExporter(application)
     private val skillRepository = SkillRepository(application)
-    private val scheduleRepository = ScheduleRepository(application)
     private val artifactsRepository = ArtifactsRepository(application)
     private val localState = MutableStateFlow(HomeUiState())
     private var chatJob: Job? = null
@@ -122,15 +117,7 @@ class HomeViewModel(
         viewModelScope.launch {
             skillRepository.ensureSkillsDir()
             refreshSkills()
-            scheduleRepository.load()
-            scheduleRepository.reschedulePending()
             refreshArtifacts()
-        }
-
-        viewModelScope.launch {
-            scheduleRepository.tasks.collect { tasks ->
-                localState.update { it.copy(scheduledTasks = tasks) }
-            }
         }
 
         viewModelScope.launch {
@@ -235,44 +222,6 @@ class HomeViewModel(
     private suspend fun refreshArtifacts() {
         val items = artifactsRepository.listArtifacts()
         localState.update { it.copy(artifacts = items) }
-    }
-
-    fun onScheduleTask(prompt: String, triggerAtMillis: Long) {
-        viewModelScope.launch {
-            runCatching {
-                val task = scheduleRepository.create(prompt, triggerAtMillis)
-                ScheduleWorkScheduler.enqueue(application, task)
-            }.onSuccess {
-                localState.update {
-                    it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.schedule_created))
-                }
-            }.onFailure { e ->
-                android.util.Log.e("HomeViewModel", "schedule enqueue failed", e)
-                localState.update {
-                    it.copy(
-                        chatSnackbar = application.getString(
-                            com.proot.cowork.R.string.schedule_enqueue_failed,
-                            e.message ?: "unknown error",
-                        ),
-                    )
-                }
-            }
-        }
-    }
-
-    fun onCancelScheduledTask(taskId: String) {
-        viewModelScope.launch {
-            scheduleRepository.cancel(taskId)
-            localState.update {
-                it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.schedule_cancelled))
-            }
-        }
-    }
-
-    fun onDeleteScheduledTask(taskId: String) {
-        viewModelScope.launch {
-            scheduleRepository.delete(taskId)
-        }
     }
 
     fun onShareArtifact(path: String) {
@@ -938,10 +887,6 @@ class HomeViewModel(
 
     fun onQuickPrompt(prompt: String) {
         sendUserMessage(prompt.trim(), clearInput = false)
-    }
-
-    fun onScheduleDraft(text: String) {
-        onScheduleTask(text, System.currentTimeMillis() + 3_600_000L)
     }
 
     fun onOpenFilePath(path: String) {

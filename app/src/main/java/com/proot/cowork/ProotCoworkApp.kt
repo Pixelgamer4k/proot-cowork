@@ -5,7 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import com.proot.cowork.data.prefs.SettingsRepository
-import com.proot.cowork.data.schedule.ScheduleRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.debug.DebugStatusWriter
@@ -38,10 +37,6 @@ class ProotCoworkApp : Application() {
         DebugStatusWriter.init(this)
         createNotificationChannels()
         appScope.launch {
-            runCatching { ScheduleRepository(this@ProotCoworkApp).reschedulePending() }
-                .onFailure { e ->
-                    android.util.Log.e("ProotCoworkApp", "schedule reschedule failed", e)
-                }
             if (TERMUX_STACK_DESKTOP) {
                 try {
                     prootContainerRepository.repairStateOnStartup()

@@ -139,11 +139,10 @@ fun HomeScreen(
                 when (tab) {
                     CoworkTab.Chat -> ChatTabContent(
                         messages = uiState.messages,
-                        swarmTasks = uiState.swarmTasks,
+                        swarmResponse = uiState.swarmResponse,
                         isExecuting = uiState.isExecuting,
                         isApiConfigured = uiState.isApiConfigured,
                         awaitingApproval = uiState.awaitingApproval,
-                        pendingPlan = uiState.pendingPlan,
                         composerBottomPadding = if (showChatComposer) composerBottomPadding + 8.dp else 0.dp,
                         onQuickPrompt = viewModel::onQuickPrompt,
                         onUpdateSwarmTask = viewModel::onUpdateSwarmTask,

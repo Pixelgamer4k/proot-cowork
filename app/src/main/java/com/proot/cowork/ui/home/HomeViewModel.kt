@@ -18,8 +18,14 @@ import com.proot.cowork.domain.agent.ExecutionMode
 import com.proot.cowork.domain.agent.MessageRole
 import com.proot.cowork.domain.agent.SwarmAgentState
 import com.proot.cowork.domain.agent.SwarmAgentType
+import com.proot.cowork.domain.agent.PlanStep
+import com.proot.cowork.domain.agent.SwarmOutputParser
+import com.proot.cowork.domain.agent.SwarmPhase
+import com.proot.cowork.domain.agent.SwarmResponse
 import com.proot.cowork.domain.agent.SwarmTask
+import com.proot.cowork.domain.agent.SwarmResultType
 import com.proot.cowork.domain.agent.TaskPlan
+import com.proot.cowork.domain.agent.TaskStatus
 import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.domain.importing.ImportPhase
 import com.proot.cowork.domain.importing.ImportSession
@@ -57,6 +63,7 @@ data class HomeUiState(
     val isImportBusy: Boolean = false,
     val isApiConfigured: Boolean = false,
     val chatError: String? = null,
+    val swarmResponse: SwarmResponse? = null,
 )
 
 class HomeViewModel(
@@ -74,15 +81,25 @@ class HomeViewModel(
         viewModelScope.launch {
             AgentExecutionSession.snapshot.collect { snap ->
                 localState.update { local ->
+                    val mergedMessages = if (snap.messages.isNotEmpty()) {
+                        mergeMessages(local.messages, snap.messages)
+                    } else {
+                        local.messages
+                    }
+                    val tasks = snap.swarmTasks.ifEmpty { local.swarmTasks }
+                    val executing = snap.isRunning || (chatJob?.isActive == true)
                     local.copy(
-                        messages = if (snap.messages.isNotEmpty()) {
-                            mergeMessages(local.messages, snap.messages)
-                        } else {
-                            local.messages
-                        },
-                        swarmTasks = snap.swarmTasks.ifEmpty { local.swarmTasks },
+                        messages = mergedMessages,
+                        swarmTasks = tasks,
                         agentStates = snap.agentStates,
-                        isExecuting = snap.isRunning || (chatJob?.isActive == true),
+                        isExecuting = executing,
+                        swarmResponse = refreshSwarmResponse(
+                            existing = local.swarmResponse,
+                            messages = mergedMessages,
+                            tasks = tasks,
+                            isExecuting = executing,
+                            awaitingApproval = local.awaitingApproval,
+                        ),
                     )
                 }
             }
@@ -127,6 +144,63 @@ class HomeViewModel(
             }
         }
         return merged
+    }
+
+    private fun buildPlanSteps(tasks: List<SwarmTask>): List<PlanStep> =
+        tasks.map { PlanStep(it.id, it.title, it.agent.displayName) }
+
+    private fun toolMessagesForSwarmTurn(messages: List<AgentMessage>, swarmMessageId: String): List<AgentMessage> {
+        val idx = messages.indexOfFirst { it.id == swarmMessageId }
+        if (idx < 0) return emptyList()
+        return messages
+            .drop(idx + 1)
+            .takeWhile { it.role != MessageRole.USER }
+            .filter { it.role == MessageRole.TOOL }
+    }
+
+    private fun refreshSwarmResponse(
+        existing: SwarmResponse?,
+        messages: List<AgentMessage>,
+        tasks: List<SwarmTask>,
+        isExecuting: Boolean,
+        awaitingApproval: Boolean,
+    ): SwarmResponse? {
+        val base = existing ?: return null
+        val activeTasks = tasks.ifEmpty { base.tasks }
+        val toolMsgs = toolMessagesForSwarmTurn(messages, base.messageId)
+        val parsed = SwarmOutputParser.parse(toolMsgs)
+        val thinking = when {
+            base.phase == SwarmPhase.PLANNING && toolMsgs.isEmpty() -> listOf("Planning swarm…")
+            toolMsgs.isNotEmpty() -> toolMsgs.map { SwarmOutputParser.thinkingLine(it) }
+            isExecuting -> listOf("Agents working…")
+            else -> base.thinkingLogs
+        }
+        val completedCount = activeTasks.count { it.status == TaskStatus.COMPLETED }
+        val runningCount = activeTasks.count { it.status == TaskStatus.RUNNING }
+        val phase = when {
+            awaitingApproval -> SwarmPhase.AWAITING_APPROVAL
+            isExecuting -> SwarmPhase.EXECUTING
+            base.phase == SwarmPhase.PLANNING -> SwarmPhase.PLANNING
+            completedCount > 0 || toolMsgs.isNotEmpty() || parsed.resultType != SwarmResultType.NONE ->
+                SwarmPhase.COMPLETE
+            else -> base.phase
+        }
+        val showResults = phase == SwarmPhase.COMPLETE
+        return base.copy(
+            phase = phase,
+            tasks = activeTasks,
+            plan = buildPlanSteps(activeTasks).ifEmpty { base.plan },
+            thinkingLogs = thinking,
+            terminalOutputs = parsed.terminals,
+            fileRows = if (showResults) parsed.fileRows else emptyList(),
+            summaryChips = if (showResults) parsed.chips else emptyList(),
+            narrativeSummary = if (showResults) parsed.narrative else null,
+            resultType = if (showResults) parsed.resultType else SwarmResultType.NONE,
+            currentStep = (completedCount + if (runningCount > 0) 1 else 0).coerceAtLeast(
+                if (phase == SwarmPhase.EXECUTING) 1 else 0,
+            ),
+            totalSteps = activeTasks.size.coerceAtLeast(base.totalSteps),
+        )
     }
 
     private fun resolveDesktopState(
@@ -273,10 +347,17 @@ class HomeViewModel(
                     chatError = null,
                     awaitingApproval = false,
                     pendingPlan = null,
+                    swarmResponse = SwarmResponse(
+                        messageId = assistantId,
+                        phase = SwarmPhase.PLANNING,
+                        summary = "",
+                        plan = emptyList(),
+                        thinkingLogs = listOf("Planning swarm…"),
+                    ),
                     messages = it.messages + userMsg + AgentMessage(
                         assistantId,
                         MessageRole.ASSISTANT,
-                        "Planning swarm…",
+                        "",
                     ),
                     swarmTasks = emptyList(),
                 )
@@ -292,7 +373,6 @@ class HomeViewModel(
                             history = history + userMsg,
                             isActive = { chatJob?.isActive == true },
                         )
-                        val planMessage = agentRunner.formatPlanForChat(plan)
                         AgentExecutionSession.setAwaitingApproval(plan)
                         localState.update {
                             it.copy(
@@ -300,9 +380,14 @@ class HomeViewModel(
                                 awaitingApproval = true,
                                 pendingPlan = plan,
                                 swarmTasks = plan.subtasks,
-                                messages = it.messages.map { msg ->
-                                    if (msg.id == assistantId) msg.copy(content = planMessage) else msg
-                                },
+                                swarmResponse = SwarmResponse(
+                                    messageId = assistantId,
+                                    phase = SwarmPhase.AWAITING_APPROVAL,
+                                    summary = plan.summary,
+                                    plan = buildPlanSteps(plan.subtasks),
+                                    tasks = plan.subtasks,
+                                    totalSteps = plan.subtasks.size,
+                                ),
                             )
                         }
                     }
@@ -317,7 +402,8 @@ class HomeViewModel(
                     state.copy(
                         isExecuting = false,
                         chatError = e.message ?: "Chat request failed",
-                        messages = state.messages.filterNot { it.id == assistantId && it.content.isBlank() },
+                        swarmResponse = null,
+                        messages = state.messages.filterNot { it.id == assistantId },
                     )
                 }
             }
@@ -332,6 +418,10 @@ class HomeViewModel(
                 awaitingApproval = false,
                 pendingPlan = null,
                 isExecuting = true,
+                swarmResponse = it.swarmResponse?.copy(
+                    phase = SwarmPhase.EXECUTING,
+                    currentStep = 1,
+                ),
             )
         }
         AgentExecutionSession.clearApproval()
@@ -339,8 +429,21 @@ class HomeViewModel(
     }
 
     fun onRejectPlan() {
-        localState.update {
-            it.copy(awaitingApproval = false, pendingPlan = null, swarmTasks = emptyList())
+        localState.update { state ->
+            val swarmId = state.swarmResponse?.messageId
+            state.copy(
+                awaitingApproval = false,
+                pendingPlan = null,
+                swarmTasks = emptyList(),
+                swarmResponse = null,
+                messages = if (swarmId != null) {
+                    state.messages.map { msg ->
+                        if (msg.id == swarmId) msg.copy(content = "Plan cancelled.") else msg
+                    }
+                } else {
+                    state.messages
+                },
+            )
         }
         AgentExecutionSession.clearApproval()
     }
@@ -350,7 +453,14 @@ class HomeViewModel(
             val tasks = state.swarmTasks.map { if (it.id == taskId) it.copy(title = title) else it }
             val plan = state.pendingPlan?.copy(subtasks = tasks)
             if (plan != null) AgentExecutionSession.updatePlan(plan)
-            state.copy(swarmTasks = tasks, pendingPlan = plan)
+            state.copy(
+                swarmTasks = tasks,
+                pendingPlan = plan,
+                swarmResponse = state.swarmResponse?.copy(
+                    tasks = tasks,
+                    plan = buildPlanSteps(tasks),
+                ),
+            )
         }
     }
 

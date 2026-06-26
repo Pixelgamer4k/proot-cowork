@@ -13,7 +13,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 63
-        versionName = "0.14.2-swarm-plan-ui"
+        versionName = "0.14.3-swarm-chat-ui"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

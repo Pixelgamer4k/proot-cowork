@@ -29,15 +29,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.MessageRole
-import com.proot.cowork.domain.agent.SwarmTask
-import com.proot.cowork.domain.agent.TaskPlan
-import com.proot.cowork.ui.agent.EditableSwarmTaskTree
-import com.proot.cowork.ui.agent.SwarmApprovalCard
+import com.proot.cowork.domain.agent.SwarmResponse
 import com.proot.cowork.ui.agent.ToolMessageBubble
+import com.proot.cowork.ui.agent.swarm.SwarmMessageItem
 import com.proot.cowork.ui.design.CoworkTokens
 
 private val QUICK_PROMPTS = listOf(
@@ -50,12 +49,11 @@ private val QUICK_PROMPTS = listOf(
 @Composable
 fun ChatTabContent(
     messages: List<AgentMessage>,
-    swarmTasks: List<SwarmTask>,
+    swarmResponse: SwarmResponse?,
     isExecuting: Boolean,
     isApiConfigured: Boolean,
     awaitingApproval: Boolean,
-    pendingPlan: TaskPlan?,
-    composerBottomPadding: androidx.compose.ui.unit.Dp,
+    composerBottomPadding: Dp,
     onQuickPrompt: (String) -> Unit,
     onUpdateSwarmTask: (String, String) -> Unit,
     onApprovePlan: () -> Unit,
@@ -63,10 +61,13 @@ fun ChatTabContent(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(messages.size, isExecuting, awaitingApproval) {
-        if (messages.isNotEmpty() || isExecuting || awaitingApproval) {
-            val target = (messages.size + if (awaitingApproval) 1 else 0).coerceAtLeast(0)
-            listState.animateScrollToItem(target)
+    val visibleMessages = messages.filterNot { msg ->
+        isEmbeddedInSwarm(msg, swarmResponse, messages)
+    }
+
+    LaunchedEffect(visibleMessages.size, isExecuting, awaitingApproval, swarmResponse?.phase) {
+        if (visibleMessages.isNotEmpty() || isExecuting || awaitingApproval) {
+            listState.animateScrollToItem((visibleMessages.size - 1).coerceAtLeast(0))
         }
     }
 
@@ -76,7 +77,7 @@ fun ChatTabContent(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = composerBottomPadding + 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (messages.isEmpty() && !isExecuting && !awaitingApproval) {
+        if (visibleMessages.isEmpty() && !isExecuting && !awaitingApproval) {
             item(key = "hero") {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -136,50 +137,67 @@ fun ChatTabContent(
             }
         }
 
-        if (awaitingApproval && pendingPlan != null) {
-            item(key = "approval") {
-                SwarmApprovalCard(
-                    plan = pendingPlan,
-                    tasks = swarmTasks,
-                    onUpdateTask = onUpdateSwarmTask,
-                    onApprove = onApprovePlan,
-                    onReject = onRejectPlan,
-                )
-            }
-        } else if (swarmTasks.isNotEmpty() && isExecuting) {
-            item(key = "swarm-progress") {
-                Surface(shape = CoworkTokens.ShapeCard, color = CoworkTokens.Mint.copy(alpha = 0.08f), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(stringResource(R.string.swarm_plan_title), color = CoworkTokens.Mint, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.size(8.dp))
-                        EditableSwarmTaskTree(tasks = swarmTasks, editable = false, onUpdateTask = { _, _ -> })
-                    }
+        items(visibleMessages, key = { it.id }) { msg ->
+            when {
+                swarmResponse != null && msg.id == swarmResponse.messageId -> {
+                    SwarmMessageItem(
+                        response = swarmResponse,
+                        editable = awaitingApproval,
+                        onUpdateTask = onUpdateSwarmTask,
+                        onApprove = onApprovePlan,
+                        onReject = onRejectPlan,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
-            }
-        }
-
-        items(messages, key = { it.id }) { msg ->
-            when (msg.role) {
-                MessageRole.TOOL -> ToolMessageBubble(msg, Modifier.fillMaxWidth())
+                msg.role == MessageRole.TOOL -> {
+                    ToolMessageBubble(msg, Modifier.fillMaxWidth())
+                }
                 else -> ChatMessageBubble(msg)
             }
         }
 
-        if (isExecuting) {
+        if (isExecuting && swarmResponse == null) {
             item(key = "typing") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     repeat(3) { i ->
-                        Box(Modifier.padding(end = 4.dp).size(6.dp).clip(RoundedCornerShape(50)).background(CoworkTokens.Mint.copy(alpha = 0.3f + i * 0.2f)))
+                        Box(
+                            Modifier
+                                .padding(end = 4.dp)
+                                .size(6.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(CoworkTokens.Mint.copy(alpha = 0.3f + i * 0.2f)),
+                        )
                     }
-                    Text(stringResource(R.string.agent_working), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    Text(
+                        stringResource(R.string.agent_working),
+                        color = CoworkTokens.TextMuted,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
         }
     }
 }
 
+private fun isEmbeddedInSwarm(
+    msg: AgentMessage,
+    swarm: SwarmResponse?,
+    messages: List<AgentMessage>,
+): Boolean {
+    if (swarm == null) return false
+    val swarmIdx = messages.indexOfFirst { it.id == swarm.messageId }
+    if (swarmIdx < 0) return false
+    val msgIdx = messages.indexOfFirst { it.id == msg.id }
+    if (msgIdx < 0) return false
+    if (msg.id == swarm.messageId) return false
+    val endIdx = messages.drop(swarmIdx + 1).indexOfFirst { it.role == MessageRole.USER }
+    val rangeEnd = if (endIdx < 0) messages.size else swarmIdx + 1 + endIdx
+    return msgIdx in (swarmIdx + 1) until rangeEnd && msg.role == MessageRole.TOOL
+}
+
 @Composable
 private fun ChatMessageBubble(msg: AgentMessage) {
+    if (msg.role == MessageRole.ASSISTANT && msg.content.isBlank()) return
     val isUser = msg.role == MessageRole.USER
     Box(Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
         Surface(

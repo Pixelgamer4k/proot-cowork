@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 
 data class ShellResult(
     val exitCode: Int,
@@ -42,7 +43,12 @@ class ProotGuestShellExecutor(private val context: Context) {
             ?: return@withContext ShellResult.error("Termux bash not ready")
 
         val env = TermuxShellEnvironment.buildProcessEnvironment(context)
-        val guestCmd = "proot-distro login ${shellQuote(distro)} --shared-tmp -- bash -lc ${shellQuote(command)}"
+        val prootDistro = File(TermuxBootstrap.prefixDir(context), "bin/proot-distro")
+        if (!prootDistro.canExecute()) {
+            return@withContext ShellResult.error("proot-distro not installed in Termux prefix")
+        }
+        val guestCmd =
+            "${shellQuote(prootDistro.absolutePath)} login ${shellQuote(distro)} --shared-tmp -- bash -lc ${shellQuote(command)}"
         val pb = ProcessBuilder(bash.absolutePath, "-c", guestCmd)
             .directory(TermuxBootstrap.homeDir(context))
             .redirectErrorStream(true)

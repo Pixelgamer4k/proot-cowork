@@ -3,6 +3,7 @@ package com.proot.cowork.data.schedule
 import android.content.Context
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.proot.cowork.domain.schedule.ScheduledTask
@@ -14,7 +15,7 @@ object ScheduleWorkScheduler {
 
     fun enqueue(context: Context, task: ScheduledTask) {
         val delayMs = max(0L, task.triggerAtMillis - System.currentTimeMillis())
-        val request = OneTimeWorkRequestBuilder<ScheduledAgentWorker>()
+        val builder = OneTimeWorkRequestBuilder<ScheduledAgentWorker>()
             .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
             .setInputData(
                 workDataOf(
@@ -23,7 +24,10 @@ object ScheduleWorkScheduler {
                 ),
             )
             .addTag(WORK_TAG)
-            .build()
+        if (delayMs <= EXPEDITED_MAX_DELAY_MS) {
+            builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+        }
+        val request = builder.build()
         WorkManager.getInstance(context.applicationContext)
             .enqueueUniqueWork(task.id, ExistingWorkPolicy.REPLACE, request)
     }
@@ -33,4 +37,5 @@ object ScheduleWorkScheduler {
     }
 
     private const val WORK_TAG = "cowork_scheduled_agent"
+    private const val EXPEDITED_MAX_DELAY_MS = 15 * 60 * 1000L
 }

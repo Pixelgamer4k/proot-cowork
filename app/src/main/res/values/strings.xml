@@ -115,6 +115,7 @@
     <string name="schedule_pick_time">Time</string>
     <string name="schedule_empty">No scheduled tasks yet.</string>
     <string name="schedule_created">Task scheduled.</string>
+    <string name="schedule_running">Running scheduled agent task…</string>
     <string name="schedule_cancelled">Scheduled task cancelled.</string>
     <string name="schedule_cancel">Cancel schedule</string>
     <string name="schedule_delete">Remove</string>

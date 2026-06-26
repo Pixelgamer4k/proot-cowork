@@ -2,6 +2,7 @@ package com.proot.cowork.termux.terminal
 
 import android.content.Context
 import com.proot.cowork.data.prootcontainer.ProotContainerValidator
+import com.proot.cowork.termux.bootstrap.CoworkAssetInstaller
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
 import com.proot.cowork.termux.bootstrap.TermuxShellEnvironment
 import com.termux.terminal.TerminalSession
@@ -15,6 +16,9 @@ object ProotGuestTerminalController {
 
     fun attach(terminalView: TerminalView, context: Context): Boolean {
         TerminalKeyboard.setup(terminalView)
+        if (session?.isRunning != true) {
+            session = null
+        }
         if (session?.isRunning == true) {
             ensureRenderer(terminalView)
             terminalView.setTerminalViewClient(CoworkTerminalViewClient(terminalView))
@@ -45,13 +49,17 @@ object ProotGuestTerminalController {
         distro: String,
     ) {
         if (session?.isRunning == true) return
+        val prefix = TermuxBootstrap.prefixDir(context)
+        CoworkAssetInstaller.installIfNeeded(context, prefix)
+        val script = File(prefix, "share/cowork/proot-guest-login.sh")
+        if (!script.isFile) return
+
         val home = TermuxBootstrap.homeDir(context).absolutePath
-        val loginCmd = "proot-distro login $distro --shared-tmp -- bash -l"
         val client = CoworkTerminalSessionClient(terminalView)
         val newSession = TerminalSession(
             bash.absolutePath,
             home,
-            arrayOf("-c", loginCmd),
+            arrayOf(script.absolutePath, distro),
             TermuxShellEnvironment.build(context),
             10_000,
             client,

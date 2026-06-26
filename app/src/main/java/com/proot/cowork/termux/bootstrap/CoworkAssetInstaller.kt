@@ -10,9 +10,10 @@ import java.io.File
 object CoworkAssetInstaller {
 
     private const val TAG = "CoworkAssetInstaller"
-    private const val MARKER = ".cowork_assets_v7"
+    private const val MARKER = ".cowork_assets_v8"
 
     private val SCRIPTS = listOf(
+        "proot-guest-login.sh",
         "proot-xfce-install.sh",
         "proot-xfce-start.sh",
         "proot-xfce-export.sh",

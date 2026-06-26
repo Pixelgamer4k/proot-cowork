@@ -13,7 +13,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionName = "0.19.2-terminal-keys"
-        versionCode = 71
+        versionCode = 72
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

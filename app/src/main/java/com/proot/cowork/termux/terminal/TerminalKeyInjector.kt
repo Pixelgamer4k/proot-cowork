@@ -84,12 +84,7 @@ object TerminalKeyInjector {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             key.codePoints().forEach { codePoint ->
-                terminalView.inputCodePoint(
-                    TerminalView.KEY_EVENT_SOURCE_VIRTUAL_KEYBOARD,
-                    codePoint,
-                    ctrl,
-                    alt,
-                )
+                terminalView.inputCodePoint(codePoint, ctrl, alt)
             }
         } else {
             val session = terminalView.currentSession

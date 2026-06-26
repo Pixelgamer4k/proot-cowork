@@ -105,22 +105,27 @@ object TermuxBootstrap {
             return false
         }
 
+        val elfRoot = "/data/data/${context.packageName}/files"
+        val filesRoot = context.filesDir.absolutePath
+        if (!TermuxNativeLibRepair.applyIfNeeded(context, prefix, elfRoot, filesRoot, context.cacheDir.absolutePath)) {
+            Log.w(TAG, "native lib repair did not complete cleanly")
+        }
+
         TermuxAptConfig.applyIfNeeded(context, prefix)
         TermuxCoworkProfile.applyIfNeeded(prefix)
         CoworkAssetInstaller.installIfNeeded(context, prefix)
         TermuxSymlinkFix.repairIfNeeded(context, prefix)
-        val elfRoot = "/data/data/${context.packageName}/files"
         TermuxElfPathPatch.patchLibAptIfNeeded(
             prefix,
             elfRoot,
-            context.filesDir.absolutePath,
+            filesRoot,
             context.cacheDir.absolutePath,
         )
         TermuxPythonRepair.applyIfNeeded(
             context,
             prefix,
             elfRoot,
-            context.filesDir.absolutePath,
+            filesRoot,
         )
         TermuxAptWrapper.installIfNeeded(context, prefix)
         TermuxDpkgRepair.repairIfNeeded(prefix, context.filesDir.absolutePath)

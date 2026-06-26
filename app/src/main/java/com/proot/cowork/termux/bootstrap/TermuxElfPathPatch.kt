@@ -6,10 +6,8 @@ import java.io.RandomAccessFile
 
 /**
  * Patches null-terminated path strings in ELF binaries when the replacement fits in-place.
- * libapt is patched separately via [patchLibAptIfNeeded] using only the shorter elfRoot path.
- *
- * [libpython] must never use prefix-based patching: frozen stdlib blobs inside the .so can
- * contain accidental `/data/data/com.termux/files` byte sequences. Use [patchPythonRuntime] instead.
+ * Shared libraries under prefix/lib are never prefix-patched — accidental matches corrupt ELF shdrs.
+ * libapt is patched separately via [patchLibAptIfNeeded]; python via [patchPythonRuntime].
  */
 object TermuxElfPathPatch {
 
@@ -72,13 +70,13 @@ object TermuxElfPathPatch {
     }
 
     fun applyIfNeeded(prefix: File, elfRoot: String, filesRoot: String): Boolean {
-        val marker = File(prefix, ".termux_elf_patched_v4")
+        val marker = File(prefix, ".termux_elf_patched_v5")
         if (marker.isFile) return true
+        File(prefix, ".termux_elf_patched_v4").delete()
         File(prefix, ".termux_elf_patched_v3").delete()
 
         var patched = 0
         val roots = listOf(
-            File(prefix, "lib"),
             File(prefix, "libexec"),
             File(prefix, "bin"),
         )

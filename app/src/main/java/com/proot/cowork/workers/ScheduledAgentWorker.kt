@@ -61,9 +61,7 @@ class ScheduledAgentWorker(
                 history = emptyList(),
                 isActive = { !isStopped && AgentRunController.isActive() },
                 onAssistantDelta = {},
-                onToolEvent = { msg ->
-                    setForeground(buildForegroundInfo(applicationContext, msg.toolName ?: "tool"))
-                },
+                onToolEvent = {},
             )
             repo.markDone(taskId)
             Result.success()

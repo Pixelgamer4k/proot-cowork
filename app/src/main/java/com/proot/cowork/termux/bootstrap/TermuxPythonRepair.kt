@@ -5,64 +5,97 @@ import android.util.Log
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.BufferedInputStream
 import java.io.File
+import java.io.InputStream
 import java.util.zip.GZIPInputStream
 
 /**
- * Restores a clean Python runtime when [TermuxElfPathPatch] corrupted lib-dynload modules.
- * CI bundles an unpatched copy in assets/python-runtime.tar.gz.
+ * Restores a clean Python runtime when [TermuxElfPathPatch] corrupted lib-dynload modules
+ * or [TermuxPathPatch] damaged stdlib `.py` files.
+ * CI bundles an unpatched copy in assets/python-runtime.tar.gz (fallback: bootstrap.bin).
  */
 object TermuxPythonRepair {
 
     private const val TAG = "TermuxPythonRepair"
     private const val ASSET = "python-runtime.tar.gz"
+    private const val BOOTSTRAP_ASSET = "bootstrap.bin"
 
     fun applyIfNeeded(context: Context, prefix: File, elfRoot: String, filesRoot: String): Boolean {
         File(prefix, ".termux_python_repaired_v1").delete()
-        val marker = File(prefix, ".termux_python_repaired_v2")
+        File(prefix, ".termux_python_repaired_v2").delete()
+        val marker = File(prefix, ".termux_python_repaired_v3")
         if (marker.isFile && probePython(context, prefix)) return true
 
-        if (!restoreFromAsset(context, prefix)) {
-            Log.w(TAG, "python-runtime asset missing; applying safe path patch only")
-            TermuxElfPathPatch.patchPythonRuntime(prefix, elfRoot, filesRoot)
-            marker.createNewFile()
-            return probePython(context, prefix)
+        val restored = restoreFromAsset(context, prefix, ASSET) ||
+            restorePythonFromBootstrap(context, prefix)
+        if (!restored) {
+            Log.w(TAG, "python-runtime assets missing; applying ELF path patch only")
         }
 
         TermuxElfPathPatch.patchPythonRuntime(prefix, elfRoot, filesRoot)
-        marker.createNewFile()
         val ok = probePython(context, prefix)
-        if (!ok) {
-            Log.e(TAG, "python still broken after repair")
+        if (ok) {
+            marker.createNewFile()
+            Log.i(TAG, "python runtime repaired")
         } else {
-            Log.i(TAG, "python runtime repaired (ctypes ok)")
+            marker.delete()
+            Log.e(TAG, "python still broken after repair (check base64.py / proot-distro import)")
         }
         return ok
     }
 
-    private fun restoreFromAsset(context: Context, prefix: File): Boolean {
+    private fun restoreFromAsset(context: Context, prefix: File, assetName: String): Boolean {
         return try {
-            context.assets.open(ASSET).use { input ->
-                TarArchiveInputStream(GZIPInputStream(BufferedInputStream(input))).use { tar ->
-                    var entry = tar.nextEntry
-                    while (entry != null) {
-                        val outFile = File(prefix, entry.name)
-                        if (entry.isDirectory) {
-                            outFile.mkdirs()
-                        } else {
-                            outFile.parentFile?.mkdirs()
-                            outFile.outputStream().use { out -> tar.copyTo(out) }
-                            if (entry.mode and 0b001_001_001 != 0) {
-                                outFile.setExecutable(true, false)
-                            }
-                        }
-                        entry = tar.nextEntry
-                    }
+            context.assets.open(assetName).use { input ->
+                extractTarGz(input, prefix) { name ->
+                    name == "lib" || name.startsWith("lib/") || name == "bin" || name.startsWith("bin/")
                 }
             }
             true
         } catch (e: Exception) {
-            Log.w(TAG, "failed to extract $ASSET: ${e.message}")
+            Log.w(TAG, "failed to extract $assetName: ${e.message}")
             false
+        }
+    }
+
+    private fun restorePythonFromBootstrap(context: Context, prefix: File): Boolean {
+        return try {
+            context.assets.open(BOOTSTRAP_ASSET).use { input ->
+                extractTarGz(input, prefix) { name ->
+                    name == "lib/python3.13" || name.startsWith("lib/python3.13/") ||
+                        name == "lib/libpython3.13.so" || name == "lib/libpython3.so" ||
+                        name == "bin/python3.13" || name == "bin/python3"
+                }
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to extract python from $BOOTSTRAP_ASSET: ${e.message}")
+            false
+        }
+    }
+
+    private fun extractTarGz(
+        input: InputStream,
+        prefix: File,
+        include: (String) -> Boolean,
+    ) {
+        TarArchiveInputStream(GZIPInputStream(BufferedInputStream(input))).use { tar ->
+            var entry = tar.nextEntry
+            while (entry != null) {
+                val name = entry.name
+                if (include(name)) {
+                    val outFile = File(prefix, name)
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        outFile.parentFile?.mkdirs()
+                        outFile.outputStream().use { out -> tar.copyTo(out) }
+                        if (entry.mode and 0b001_001_001 != 0) {
+                            outFile.setExecutable(true, false)
+                        }
+                    }
+                }
+                entry = tar.nextEntry
+            }
         }
     }
 
@@ -71,8 +104,15 @@ object TermuxPythonRepair {
         if (!python.canExecute()) return false
         val bash = TermuxBootstrap.shellExecutable(context) ?: return false
         val env = TermuxShellEnvironment.buildProcessEnvironment(context)
-        val probeScript =
-            "${python.absolutePath} -c \"import ctypes; from proot_distro.cli import main\""
+        val probeScript = buildString {
+            append(python.absolutePath)
+            append(" -c \"")
+            append("import base64; ")
+            append("import importlib.metadata; ")
+            append("import ctypes; ")
+            append("from proot_distro.cli import main")
+            append("\"")
+        }
         val pb = ProcessBuilder(bash.absolutePath, "-c", probeScript)
         pb.directory(TermuxBootstrap.homeDir(context))
         pb.environment().clear()

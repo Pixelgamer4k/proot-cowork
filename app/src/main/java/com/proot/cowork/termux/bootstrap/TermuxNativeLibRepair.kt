@@ -41,8 +41,9 @@ object TermuxNativeLibRepair {
         }
 
         File(prefix, ".termux_libapt_patched_v1").delete()
-        File(prefix, ".termux_python_repaired_v2").delete()
         File(prefix, ".termux_python_repaired_v1").delete()
+        File(prefix, ".termux_python_repaired_v2").delete()
+        File(prefix, ".termux_python_repaired_v3").delete()
         TermuxElfPathPatch.patchLibAptIfNeeded(prefix, elfRoot, filesRoot, cacheRoot)
         TermuxPythonRepair.applyIfNeeded(context, prefix, elfRoot, filesRoot)
 

@@ -64,11 +64,19 @@ object TermuxPathPatch {
             LEGACY_CACHE_USER to cacheRoot,
         )
 
+    private fun shouldSkipPathPatch(file: File, root: File): Boolean {
+        if (file.name.endsWith(".so") || file.name.endsWith(".a")) return true
+        val rel = file.relativeTo(root).path.replace('\\', '/')
+        // Python stdlib + site-packages: path rewrites corrupt .py sources (e.g. base64.py).
+        if (rel.startsWith("lib/python3.")) return true
+        return false
+    }
+
     private fun patchTree(root: File, replacements: List<Pair<String, String>>) {
         if (!root.isDirectory) return
         root.walkTopDown().forEach { file ->
             if (!file.isFile) return@forEach
-            if (file.name.endsWith(".so") || file.name.endsWith(".a")) return@forEach
+            if (shouldSkipPathPatch(file, root)) return@forEach
             patchTextFileIfNeeded(file, replacements)
         }
     }

@@ -67,12 +67,15 @@ class CoworkTerminalViewClient(
 
 class CoworkTerminalSessionClient(
     private val terminalView: TerminalView,
+    private val onFinished: (() -> Unit)? = null,
 ) : TerminalSessionClient {
     override fun onTextChanged(changedSession: TerminalSession) {
         terminalView.post { terminalView.onScreenUpdated() }
     }
     override fun onTitleChanged(updatedSession: TerminalSession) {}
-    override fun onSessionFinished(finishedSession: TerminalSession) {}
+    override fun onSessionFinished(finishedSession: TerminalSession) {
+        onFinished?.invoke()
+    }
     override fun onCopyTextToClipboard(session: TerminalSession, text: String) {}
     override fun onPasteTextFromClipboard(session: TerminalSession) {}
     override fun onBell(session: TerminalSession) {}

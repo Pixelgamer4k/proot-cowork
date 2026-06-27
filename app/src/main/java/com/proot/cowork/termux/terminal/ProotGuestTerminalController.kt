@@ -13,17 +13,28 @@ import java.io.File
 object ProotGuestTerminalController {
 
     private var session: TerminalSession? = null
+    private var attachedView: TerminalView? = null
+    private var attachedClient: CoworkTerminalViewClient? = null
 
-    fun attach(terminalView: TerminalView, context: Context, client: CoworkTerminalViewClient? = null): Boolean {
-        TerminalKeyboard.setup(terminalView)
+    fun ensureAttached(
+        terminalView: TerminalView,
+        context: Context,
+        client: CoworkTerminalViewClient?,
+    ): Boolean {
+        TerminalKeyboard.setupOnce(terminalView)
+        val viewClient = client ?: CoworkTerminalViewClient(terminalView)
+
         if (session?.isRunning != true) {
             session = null
+            attachedView = null
         }
-        val viewClient = client ?: CoworkTerminalViewClient(terminalView)
+
+        if (session?.isRunning == true && attachedView === terminalView) {
+            return true
+        }
+
         if (session?.isRunning == true) {
-            ensureRenderer(terminalView)
-            terminalView.setTerminalViewClient(viewClient)
-            terminalView.attachSession(session)
+            bindView(terminalView, viewClient, session!!)
             return true
         }
 
@@ -32,15 +43,43 @@ object ProotGuestTerminalController {
 
         val bash = TermuxBootstrap.shellExecutable(context) ?: return false
         ensureRenderer(terminalView)
-        terminalView.setTerminalViewClient(viewClient)
 
         if (terminalView.width > 0 && terminalView.height > 0) {
-            startSession(terminalView, context, bash, distro)
+            startSession(terminalView, context, bash, distro, viewClient)
             return session?.isRunning == true
         }
 
-        terminalView.post { startSession(terminalView, context, bash, distro) }
+        terminalView.post { startSession(terminalView, context, bash, distro, viewClient) }
         return false
+    }
+
+    fun isSessionRunning(): Boolean = session?.isRunning == true
+
+    fun onSessionFinished() {
+        session = null
+        attachedView = null
+        attachedClient = null
+    }
+
+    fun restoreFocus(terminalView: TerminalView?) {
+        val view = terminalView ?: attachedView ?: return
+        if (session?.isRunning == true) {
+            TerminalKeyboard.focusAndShow(view)
+        }
+    }
+
+    private fun bindView(
+        terminalView: TerminalView,
+        client: CoworkTerminalViewClient,
+        activeSession: TerminalSession,
+    ) {
+        ensureRenderer(terminalView)
+        terminalView.setTerminalViewClient(client)
+        if (terminalView.currentSession !== activeSession) {
+            terminalView.attachSession(activeSession)
+        }
+        attachedView = terminalView
+        attachedClient = client
     }
 
     private fun startSession(
@@ -48,25 +87,32 @@ object ProotGuestTerminalController {
         context: Context,
         bash: File,
         distro: String,
+        client: CoworkTerminalViewClient,
     ) {
-        if (session?.isRunning == true) return
+        if (session?.isRunning == true) {
+            bindView(terminalView, client, session!!)
+            return
+        }
+
         val prefix = TermuxBootstrap.prefixDir(context)
         CoworkAssetInstaller.installIfNeeded(context, prefix)
         val script = File(prefix, "share/cowork/proot-guest-login.sh")
         if (!script.isFile) return
 
         val home = TermuxBootstrap.homeDir(context).absolutePath
-        val client = CoworkTerminalSessionClient(terminalView)
+        val sessionClient = CoworkTerminalSessionClient(terminalView) {
+            onSessionFinished()
+        }
         val newSession = TerminalSession(
             bash.absolutePath,
             home,
             arrayOf(bash.absolutePath, script.absolutePath, distro),
             TermuxShellEnvironment.build(context),
             10_000,
-            client,
+            sessionClient,
         )
         session = newSession
-        terminalView.attachSession(newSession)
+        bindView(terminalView, client, newSession)
         if (newSession.isRunning) {
             TerminalKeyboard.focusAndShow(terminalView)
         }

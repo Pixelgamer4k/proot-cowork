@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 fun TerminalExtraKeysBar(
     terminalView: TerminalView?,
     client: CoworkTerminalViewClient?,
+    onBeforeSend: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (terminalView == null || client == null) return
@@ -47,6 +48,7 @@ fun TerminalExtraKeysBar(
     modifierTick // force recomposition when CTRL/ALT toggles
 
     fun send(key: String) {
+        onBeforeSend()
         TerminalKeyInjector.sendKey(terminalView, client, key)
         if (key == "CTRL" || key == "ALT" || key == "SHIFT") {
             modifierTick++

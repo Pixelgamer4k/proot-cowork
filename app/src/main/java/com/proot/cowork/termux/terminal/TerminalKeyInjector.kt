@@ -51,6 +51,9 @@ object TerminalKeyInjector {
         client: CoworkTerminalViewClient,
         key: String,
     ) {
+        val session = terminalView.currentSession
+        if (session == null || !session.isRunning) return
+
         when (key) {
             "CTRL" -> client.toggleCtrl()
             "ALT" -> client.toggleAlt()

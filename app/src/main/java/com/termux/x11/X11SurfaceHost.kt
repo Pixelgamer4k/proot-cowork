@@ -19,15 +19,11 @@ class X11SurfaceHost(context: Context) : FrameLayout(context) {
         isConnected = { LorieView.connected() },
     )
 
+    private var desktopInputEnabled = true
+
     init {
         LorieViewEmbed.attachCallback(lorieView)
-        isClickable = true
-        isFocusable = true
-        isFocusableInTouchMode = true
-
-        lorieView.isClickable = true
-        lorieView.isFocusable = true
-        lorieView.isFocusableInTouchMode = true
+        setDesktopInputEnabled(true)
 
         addView(
             lorieView,
@@ -38,12 +34,28 @@ class X11SurfaceHost(context: Context) : FrameLayout(context) {
             if (width > 0 && height > 0) {
                 touchHandler.updateViewSize(width, height)
             }
-            lorieView.requestFocus()
+            if (desktopInputEnabled) {
+                lorieView.requestFocus()
+            }
             touchHandler.onTouchEvent(event)
         }
 
         setOnTouchListener { _, event -> dispatchTouch(event) }
         lorieView.setOnTouchListener { _, event -> dispatchTouch(event) }
+    }
+
+    fun setDesktopInputEnabled(enabled: Boolean) {
+        desktopInputEnabled = enabled
+        isClickable = enabled
+        isFocusable = enabled
+        isFocusableInTouchMode = enabled
+        lorieView.isClickable = enabled
+        lorieView.isFocusable = enabled
+        lorieView.isFocusableInTouchMode = enabled
+        if (!enabled) {
+            lorieView.clearFocus()
+            clearFocus()
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

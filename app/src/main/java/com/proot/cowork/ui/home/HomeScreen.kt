@@ -168,6 +168,7 @@ fun HomeScreen(
                 onImportDroppedFile = viewModel::importAutoDiscover,
                 onReboot = viewModel::onReboot,
                 desktopLogHint = uiState.desktopLogHint,
+                desktopInputEnabled = selectedTab != CoworkTab.Terminal,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
             )
 
@@ -231,6 +232,7 @@ fun HomeScreen(
                     )
                     CoworkTab.Terminal -> TerminalTabContent(
                         containerInstalled = uiState.containerInstalled,
+                        isActive = selectedTab == CoworkTab.Terminal,
                     )
                 }
             }

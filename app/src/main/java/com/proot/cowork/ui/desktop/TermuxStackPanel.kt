@@ -26,14 +26,17 @@ import com.proot.cowork.domain.proot.DesktopState
 fun TermuxStackPanel(
     modifier: Modifier = Modifier,
     desktopState: DesktopState = DesktopState.RUNNING,
-    x11Layer: @Composable (Modifier) -> Unit = { EmbeddedX11Surface(it) },
+    desktopInputEnabled: Boolean = true,
+    x11Layer: @Composable (Modifier, Boolean) -> Unit = { mod, enabled ->
+        EmbeddedX11Surface(modifier = mod, inputEnabled = enabled)
+    },
 ) {
     val x11Ready by TermuxStackSession.x11Ready.collectAsState()
     val bootstrapReady by TermuxStackSession.bootstrapReady.collectAsState()
     val logLines by TermuxStackSession.logLines.collectAsState()
 
     Box(modifier = modifier.fillMaxSize()) {
-        x11Layer(Modifier.fillMaxSize())
+        x11Layer(Modifier.fillMaxSize(), desktopInputEnabled)
 
         val showOverlay = !x11Ready || desktopState == DesktopState.STARTING
         if (showOverlay) {

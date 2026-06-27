@@ -8,6 +8,14 @@ import com.termux.view.TerminalView
 
 object TerminalKeyboard {
 
+    private val setupMarker = Any()
+
+    fun setupOnce(terminalView: TerminalView) {
+        if (terminalView.getTag(setupMarker) === setupMarker) return
+        terminalView.setTag(setupMarker, setupMarker)
+        setup(terminalView)
+    }
+
     fun setup(terminalView: TerminalView) {
         terminalView.isFocusable = true
         terminalView.isFocusableInTouchMode = true
@@ -30,7 +38,9 @@ object TerminalKeyboard {
         val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
             ?: return
         view.postDelayed({
-            view.requestFocus()
+            if (!view.hasFocus()) {
+                view.requestFocus()
+            }
             imm.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
         }, 100)
     }

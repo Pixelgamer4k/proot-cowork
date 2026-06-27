@@ -30,6 +30,7 @@ fun DesktopPreviewCard(
     onImportDroppedFile: () -> Unit,
     onReboot: () -> Unit,
     desktopLogHint: String?,
+    desktopInputEnabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val x11Ready by TermuxStackSession.x11Ready.collectAsState()
@@ -50,6 +51,7 @@ fun DesktopPreviewCard(
                     TermuxStackPanel(
                         modifier = Modifier.fillMaxSize(),
                         desktopState = desktopState,
+                        desktopInputEnabled = desktopInputEnabled,
                     )
                 } else {
                     VncDesktopView(modifier = Modifier.fillMaxSize())

@@ -9,9 +9,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -28,14 +29,21 @@ import com.proot.cowork.termux.terminal.TerminalKeyboard
 import com.proot.cowork.ui.design.CoworkTokens
 import com.termux.view.TerminalView
 
+private class TerminalSurfaceHolder {
+    var terminalView: TerminalView? = null
+    var viewClient: CoworkTerminalViewClient? = null
+}
+
 @Composable
 fun EmbeddedProotTerminal(
+    isActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val bootstrapReady by TermuxStackSession.bootstrapReady.collectAsState()
-    var terminalView by remember { mutableStateOf<TerminalView?>(null) }
-    var viewClient by remember { mutableStateOf<CoworkTerminalViewClient?>(null) }
+    val x11Ready by TermuxStackSession.x11Ready.collectAsState()
+    val holder = remember { TerminalSurfaceHolder() }
+    var barEpoch by remember { mutableIntStateOf(0) }
 
     if (!bootstrapReady) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -46,6 +54,13 @@ fun EmbeddedProotTerminal(
             )
         }
         return
+    }
+
+    LaunchedEffect(isActive, x11Ready, barEpoch) {
+        if (!isActive) return@LaunchedEffect
+        val view = holder.terminalView ?: return@LaunchedEffect
+        ProotGuestTerminalController.ensureAttached(view, context, holder.viewClient)
+        ProotGuestTerminalController.restoreFocus(view)
     }
 
     Column(
@@ -60,27 +75,32 @@ fun EmbeddedProotTerminal(
             factory = { ctx ->
                 TerminalView(ctx, null).apply {
                     setBackgroundColor(Color.parseColor("#0D0D0D"))
-                    TerminalKeyboard.setup(this)
                     val client = CoworkTerminalViewClient(this)
                     setTerminalViewClient(client)
-                    terminalView = this
-                    viewClient = client
+                    holder.terminalView = this
+                    holder.viewClient = client
+                    barEpoch++
+                    ProotGuestTerminalController.ensureAttached(this, context, client)
                 }
             },
             update = { view ->
-                terminalView = view
-                if (ProotGuestTerminalController.attach(view, context, viewClient)) {
-                    if (!view.hasFocus()) {
-                        TerminalKeyboard.focusAndShow(view)
-                    }
+                if (!ProotGuestTerminalController.isSessionRunning()) {
+                    ProotGuestTerminalController.ensureAttached(view, context, holder.viewClient)
                 }
             },
         )
 
-        TerminalExtraKeysBar(
-            terminalView = terminalView,
-            client = viewClient,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (barEpoch > 0) {
+            TerminalExtraKeysBar(
+                terminalView = holder.terminalView,
+                client = holder.viewClient,
+                onBeforeSend = {
+                    holder.terminalView?.let { tv ->
+                        ProotGuestTerminalController.ensureAttached(tv, context, holder.viewClient)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }

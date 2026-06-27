@@ -23,7 +23,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Composable
-fun EmbeddedX11Surface(modifier: Modifier = Modifier) {
+fun EmbeddedX11Surface(
+    modifier: Modifier = Modifier,
+    inputEnabled: Boolean = true,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val bootstrapReady by TermuxStackSession.bootstrapReady.collectAsState()
@@ -37,6 +40,7 @@ fun EmbeddedX11Surface(modifier: Modifier = Modifier) {
             }
         },
         update = { host ->
+            host.setDesktopInputEnabled(inputEnabled)
             if (!bootstrapReady) return@AndroidView
             if (!serverStarted) {
                 serverStarted = true

@@ -16,6 +16,7 @@ import com.proot.cowork.ui.terminal.EmbeddedProotTerminal
 @Composable
 fun TerminalTabContent(
     containerInstalled: Boolean,
+    isActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (!containerInstalled) {
@@ -29,5 +30,5 @@ fun TerminalTabContent(
         return
     }
 
-    EmbeddedProotTerminal(modifier = modifier)
+    EmbeddedProotTerminal(isActive = isActive, modifier = modifier)
 }

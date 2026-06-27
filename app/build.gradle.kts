@@ -12,8 +12,8 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionName = "0.19.2-terminal-keys"
-        versionCode = 72
+        versionName = "0.19.3-terminal-focus"
+        versionCode = 73
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

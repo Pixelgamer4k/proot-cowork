@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +43,7 @@ fun EmbeddedProotTerminal(
     val context = LocalContext.current
     val bootstrapReady by TermuxStackSession.bootstrapReady.collectAsState()
     val x11Ready by TermuxStackSession.x11Ready.collectAsState()
+    val sessionRunning by ProotGuestTerminalController.sessionRunning.collectAsState()
     val holder = remember { TerminalSurfaceHolder() }
     var barEpoch by remember { mutableIntStateOf(0) }
 
@@ -68,6 +70,32 @@ fun EmbeddedProotTerminal(
             .fillMaxSize()
             .imePadding(),
     ) {
+        if (!sessionRunning && barEpoch > 0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Column {
+                    Text(
+                        stringResource(R.string.terminal_session_ended),
+                        color = CoworkTokens.Failed,
+                    )
+                    Button(
+                        onClick = {
+                            holder.terminalView?.let { view ->
+                                ProotGuestTerminalController.ensureAttached(view, context, holder.viewClient)
+                                ProotGuestTerminalController.restoreFocus(view)
+                            }
+                        },
+                        modifier = Modifier.padding(top = 8.dp),
+                    ) {
+                        Text(stringResource(R.string.terminal_reconnect))
+                    }
+                }
+            }
+        }
+
         AndroidView(
             modifier = Modifier
                 .weight(1f)

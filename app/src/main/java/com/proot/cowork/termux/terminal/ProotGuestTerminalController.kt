@@ -5,6 +5,9 @@ import com.proot.cowork.data.prootcontainer.ProotContainerValidator
 import com.proot.cowork.termux.bootstrap.CoworkAssetInstaller
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
 import com.proot.cowork.termux.bootstrap.TermuxShellEnvironment
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 import java.io.File
@@ -15,6 +18,8 @@ object ProotGuestTerminalController {
     private var session: TerminalSession? = null
     private var attachedView: TerminalView? = null
     private var attachedClient: CoworkTerminalViewClient? = null
+    private val _sessionRunning = MutableStateFlow(false)
+    val sessionRunning: StateFlow<Boolean> = _sessionRunning.asStateFlow()
 
     fun ensureAttached(
         terminalView: TerminalView,
@@ -30,11 +35,13 @@ object ProotGuestTerminalController {
         }
 
         if (session?.isRunning == true && attachedView === terminalView) {
+            _sessionRunning.value = true
             return true
         }
 
         if (session?.isRunning == true) {
             bindView(terminalView, viewClient, session!!)
+            _sessionRunning.value = true
             return true
         }
 
@@ -59,6 +66,7 @@ object ProotGuestTerminalController {
         session = null
         attachedView = null
         attachedClient = null
+        _sessionRunning.value = false
     }
 
     fun restoreFocus(terminalView: TerminalView?) {
@@ -113,6 +121,7 @@ object ProotGuestTerminalController {
         )
         session = newSession
         bindView(terminalView, client, newSession)
+        _sessionRunning.value = newSession.isRunning
         if (newSession.isRunning) {
             TerminalKeyboard.focusAndShow(terminalView)
         }

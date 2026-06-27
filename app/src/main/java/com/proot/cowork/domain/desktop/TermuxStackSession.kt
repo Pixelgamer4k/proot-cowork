@@ -54,4 +54,9 @@ object TermuxStackSession {
     fun clearLogs() {
         _logLines.value = emptyList()
     }
+
+    fun resetReadyFlags() {
+        _x11Ready.value = false
+        _termuxReady.value = false
+    }
 }

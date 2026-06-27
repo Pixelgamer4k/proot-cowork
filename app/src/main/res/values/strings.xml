@@ -18,6 +18,7 @@
     <string name="power_off">Power Off</string>
     <string name="reboot">Reboot</string>
     <string name="screenshot">Screenshot</string>
+    <string name="desktop_keyboard">Show keyboard</string>
     <string name="terminal">Terminal</string>
     <string name="browser">Files</string>
     <string name="skills">Skills</string>
@@ -112,7 +113,7 @@
     <string name="files_share">Share</string>
     <string name="files_delete">Delete</string>
     <string name="files_deleted">File deleted.</string>
-    <string name="files_uploaded">File uploaded to artifacts.</string>
+    <string name="files_uploaded">File uploaded to Desktop/Artifacts.</string>
     <string name="files_upload_failed">Upload failed.</string>
     <string name="files_attached_to_chat">Attached %1$s to chat composer.</string>
     <string name="terminal_bootstrapping">Starting Termux stack…</string>
@@ -121,8 +122,12 @@
     <string name="status_pending">Pending</string>
     <string name="status_done">Done</string>
     <string name="status_failed">Failed</string>
-    <string name="files_empty">No artifacts yet. Take a screenshot or run an agent task.</string>
-    <string name="files_actions_hint">Tap a file to attach to chat. Long-press or share icon to export.</string>
+    <string name="files_empty">This folder is empty. Upload files or take a desktop screenshot.</string>
+    <string name="files_actions_hint">Tap folders to open. Tap files to attach to chat. Long-press or share to export.</string>
+    <string name="files_home">Artifacts home</string>
+    <string name="files_up">Up</string>
+    <string name="files_refresh">Refresh</string>
+    <string name="files_container_required">Import Ubuntu container before browsing guest files.</string>
     <string name="files_new_folder">New Folder</string>
     <string name="files_upload">Upload</string>
     <string name="files_select">Select</string>
@@ -136,7 +141,13 @@
     <string name="imported_badge">Imported</string>
     <string name="rootfs_meta">Size: 3.4 GB · Desktop: XFCE4 · User: coworker (sudo nopasswd)</string>
     <string name="container_health">Container Health</string>
+    <string name="terminal_session_ended">Terminal session ended.</string>
+    <string name="terminal_reconnect">Reconnect</string>
+    <string name="screenshot_saved_guest">Screenshot saved to %1$s</string>
+    <string name="voice_permission_denied">Microphone permission is required for voice input.</string>
+    <string name="settings_delete_rootfs">Delete container</string>
     <string name="container_running">Running</string>
+    <string name="container_stopped">Stopped</string>
     <string name="chat_new_conversation">New chat</string>
     <string name="chat_export">Export</string>
     <string name="chat_export_title">Cowork chat transcript</string>

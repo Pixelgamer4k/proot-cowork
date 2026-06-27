@@ -76,6 +76,7 @@ fun ChatComposer(
     onPickFile: () -> Unit,
     onAttachArtifact: (String) -> Unit,
     onAddContextBlock: () -> Unit,
+    onSpeak: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -260,7 +261,7 @@ fun ChatComposer(
                     }
                 } else {
                     Surface(
-                        onClick = { },
+                        onClick = onSpeak,
                         shape = CoworkTokens.ShapePill,
                         color = CoworkTokens.SpeakBg,
                     ) {

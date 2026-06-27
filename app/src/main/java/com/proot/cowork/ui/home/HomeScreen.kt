@@ -1,6 +1,8 @@
 package com.proot.cowork.ui.home
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,20 +23,21 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
@@ -51,6 +54,7 @@ import com.proot.cowork.ui.tabs.FilesTabContent
 import com.proot.cowork.ui.tabs.SkillsTabContent
 import com.proot.cowork.ui.tabs.TerminalTabContent
 import com.proot.cowork.ui.theme.Motion
+import com.proot.cowork.util.VoiceInputHelper
 
 @Composable
 fun HomeScreen(
@@ -69,10 +73,12 @@ fun HomeScreen(
     ),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val selectedTab = uiState.selectedTab
     val density = LocalDensity.current
     var composerHeightPx by remember { mutableStateOf(0) }
-    var selectedTab by rememberSaveable { mutableStateOf(CoworkTab.Chat) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val shareContext = LocalContext.current
+    var voiceHelper by remember { mutableStateOf<VoiceInputHelper?>(null) }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) viewModel.importFromUri(uri)
@@ -89,17 +95,19 @@ fun HomeScreen(
         }
     }
 
-    val artifactFiles = remember(uiState.messages.size) {
-        settingsRepository.getArtifactsDir()
-            .listFiles()
-            ?.filter { it.isFile }
-            ?.map { it.name }
-            ?.sorted()
-            ?.takeLast(12)
-            .orEmpty()
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            voiceHelper?.start()
+        } else {
+            viewModel.onVoiceError(shareContext.getString(com.proot.cowork.R.string.voice_permission_denied))
+        }
     }
 
-    val shareContext = LocalContext.current
+    DisposableEffect(Unit) {
+        onDispose { voiceHelper?.stop() }
+    }
 
     LaunchedEffect(uiState.shareArtifactUri) {
         val uri = uiState.shareArtifactUri ?: return@LaunchedEffect
@@ -138,6 +146,23 @@ fun HomeScreen(
 
     val composerBottomPadding = with(density) { composerHeightPx.toDp() }
     val showChatComposer = selectedTab == CoworkTab.Chat && uiState.desktopState != DesktopState.IMPORTING
+
+    val startVoiceInput: () -> Unit = {
+        val helper = VoiceInputHelper(
+            context = shareContext,
+            onPartial = viewModel::onVoiceResult,
+            onResult = viewModel::onVoiceResult,
+            onError = viewModel::onVoiceError,
+        )
+        voiceHelper = helper
+        val granted = ContextCompat.checkSelfPermission(shareContext, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            helper.start()
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -223,12 +248,19 @@ fun HomeScreen(
                         onToggleSkill = viewModel::onToggleSkill,
                     )
                     CoworkTab.Files -> FilesTabContent(
-                        artifacts = uiState.artifacts,
-                        artifactsDirLabel = settingsRepository.getArtifactsDir().absolutePath,
-                        onOpenPath = viewModel::onOpenFilePath,
+                        entries = uiState.guestFiles,
+                        currentPath = uiState.filesPath,
+                        isLoading = uiState.filesLoading,
+                        error = uiState.filesError,
+                        containerInstalled = uiState.containerInstalled,
+                        onNavigateUp = viewModel::onFilesNavigateUp,
+                        onOpenEntry = viewModel::onFilesOpenEntry,
                         onSharePath = viewModel::onShareArtifact,
                         onDeletePath = viewModel::onDeleteArtifact,
                         onUpload = { fileUploadLauncher.launch(arrayOf("*/*")) },
+                        onRefresh = viewModel::onFilesRefresh,
+                        onNewFolder = viewModel::onFilesNewFolder,
+                        onGoHome = viewModel::onFilesGoHome,
                     )
                     CoworkTab.Terminal -> TerminalTabContent(
                         containerInstalled = uiState.containerInstalled,
@@ -249,10 +281,11 @@ fun HomeScreen(
                     executionMode = uiState.executionMode,
                     onModeChange = viewModel::onModeChange,
                     onFocusChange = { },
-                    artifactFileNames = artifactFiles,
+                    artifactFileNames = uiState.composerArtifactNames,
                     onPickFile = { attachLauncher.launch(arrayOf("*/*", "text/*", "application/*")) },
                     onAttachArtifact = viewModel::onAttachArtifact,
                     onAddContextBlock = viewModel::onAddContextBlock,
+                    onSpeak = startVoiceInput,
                     modifier = Modifier
                         .fillMaxWidth()
                         .imePadding()
@@ -260,7 +293,7 @@ fun HomeScreen(
                 )
             }
 
-            CoworkBottomNav(selected = selectedTab, onSelect = { selectedTab = it })
+            CoworkBottomNav(selected = selectedTab, onSelect = viewModel::selectTab)
         }
 
         SnackbarHost(

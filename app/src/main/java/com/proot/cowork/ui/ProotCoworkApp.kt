@@ -44,6 +44,7 @@ fun ProotCoworkApp(
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 settingsRepository = settingsRepository,
+                prootContainerRepository = prootContainerRepository,
                 onNavigateBack = { navController.popBackStack() },
             )
         }

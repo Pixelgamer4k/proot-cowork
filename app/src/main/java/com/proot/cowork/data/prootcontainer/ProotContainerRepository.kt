@@ -122,6 +122,15 @@ class ProotContainerRepository(
         startDesktopIfPossible(distro)
     }
 
+    suspend fun deleteContainer(): Boolean = withContext(Dispatchers.IO) {
+        stopDesktop()
+        recoverFilesystemState(force = true)
+        settingsRepository.clearRootfsInstalled()
+        DesktopSession.setState(DesktopState.NO_ROOTFS)
+        TermuxStackSession.resetReadyFlags()
+        true
+    }
+
     suspend fun waitForBootstrap(timeoutMs: Long = 120_000L): Boolean = withContext(Dispatchers.IO) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {

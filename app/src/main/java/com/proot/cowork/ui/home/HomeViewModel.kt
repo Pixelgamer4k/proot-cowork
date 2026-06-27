@@ -7,8 +7,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.proot.cowork.data.chat.ChatHistoryStore
 import com.proot.cowork.data.chat.ChatTranscriptExporter
-import com.proot.cowork.data.files.ArtifactEntry
-import com.proot.cowork.data.files.ArtifactsRepository
+import com.proot.cowork.data.files.GuestFileEntry
+import com.proot.cowork.data.files.GuestFileRepository
+import com.proot.cowork.data.files.GuestPaths
 import com.proot.cowork.data.skills.SkillRepository
 import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.prefs.SettingsRepository
@@ -45,7 +46,8 @@ import com.proot.cowork.domain.skills.PendingSkillWrite
 import com.proot.cowork.domain.skills.SkillApprovalSession
 import com.proot.cowork.domain.skills.SkillDefinition
 import com.proot.cowork.domain.skills.SkillSaveOffer
-import com.proot.cowork.domain.vnc.VncSession
+import com.proot.cowork.termux.x11.DesktopScreenshot
+import com.proot.cowork.data.proot.ProotGuestShellExecutor
 import com.proot.cowork.service.AgentExecutionService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,9 +93,14 @@ data class HomeUiState(
     val skills: List<SkillDefinition> = emptyList(),
     val pendingSkillWrite: PendingSkillWrite? = null,
     val skillSaveOffer: SkillSaveOffer? = null,
-    val artifacts: List<ArtifactEntry> = emptyList(),
+    val guestFiles: List<GuestFileEntry> = emptyList(),
+    val filesPath: String = GuestPaths.ARTIFACTS_DIR,
+    val filesLoading: Boolean = false,
+    val filesError: String? = null,
     val shareArtifactUri: Uri? = null,
     val containerInstalled: Boolean = false,
+    val selectedTab: CoworkTab = CoworkTab.Chat,
+    val composerArtifactNames: List<String> = emptyList(),
 )
 
 class HomeViewModel(
@@ -107,7 +114,8 @@ class HomeViewModel(
     private val chatHistoryStore = ChatHistoryStore(application)
     private val transcriptExporter = ChatTranscriptExporter(application)
     private val skillRepository = SkillRepository(application)
-    private val artifactsRepository = ArtifactsRepository(application)
+    private val guestFileRepository = GuestFileRepository(application)
+    private val guestShell = ProotGuestShellExecutor(application)
     private val localState = MutableStateFlow(HomeUiState())
     private var chatJob: Job? = null
     private var agentWasRunning = false
@@ -117,7 +125,11 @@ class HomeViewModel(
         viewModelScope.launch {
             skillRepository.ensureSkillsDir()
             refreshSkills()
-            refreshArtifacts()
+            guestFileRepository.migrateHostArtifactsIfNeeded(application)
+            guestFileRepository.ensureArtifactsDir()
+            val names = guestFileRepository.listArtifactNames()
+            localState.update { it.copy(composerArtifactNames = names) }
+            refreshGuestFiles()
         }
 
         viewModelScope.launch {
@@ -215,19 +227,86 @@ class HomeViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
 
+    fun selectTab(tab: CoworkTab) {
+        localState.update { it.copy(selectedTab = tab) }
+        if (tab == CoworkTab.Files) {
+            viewModelScope.launch { refreshGuestFiles() }
+        }
+    }
+
     fun clearShareArtifactUri() {
         localState.update { it.copy(shareArtifactUri = null) }
     }
 
-    private suspend fun refreshArtifacts() {
-        val items = artifactsRepository.listArtifacts()
-        localState.update { it.copy(artifacts = items) }
+    private suspend fun refreshGuestFiles() {
+        val path = localState.value.filesPath
+        localState.update { it.copy(filesLoading = true, filesError = null) }
+        guestFileRepository.ensureArtifactsDir()
+        val result = guestFileRepository.listDirectory(path)
+        localState.update { state ->
+            result.fold(
+                onSuccess = { entries ->
+                    state.copy(
+                        guestFiles = entries,
+                        filesLoading = false,
+                        filesError = null,
+                        composerArtifactNames = if (path == GuestPaths.ARTIFACTS_DIR) {
+                            entries.filter { !it.isDirectory }.map { it.name }
+                        } else {
+                            state.composerArtifactNames
+                        },
+                    )
+                },
+                onFailure = { err ->
+                    state.copy(guestFiles = emptyList(), filesLoading = false, filesError = err.message)
+                },
+            )
+        }
     }
 
-    fun onShareArtifact(path: String) {
+    fun onFilesRefresh() {
+        viewModelScope.launch { refreshGuestFiles() }
+    }
+
+    fun onFilesNavigateUp() {
+        val parent = GuestFileRepository.parentPath(localState.value.filesPath) ?: return
+        localState.update { it.copy(filesPath = parent) }
+        viewModelScope.launch { refreshGuestFiles() }
+    }
+
+    fun onFilesGoHome() {
+        localState.update { it.copy(filesPath = GuestPaths.ARTIFACTS_DIR) }
+        viewModelScope.launch { refreshGuestFiles() }
+    }
+
+    fun onFilesOpenEntry(entry: GuestFileEntry) {
+        if (entry.isDirectory) {
+            localState.update { it.copy(filesPath = entry.guestPath) }
+            viewModelScope.launch { refreshGuestFiles() }
+        } else {
+            viewModelScope.launch {
+                val (name, snippet) = guestFileRepository.readTextSnippet(entry.guestPath)
+                appendAttachmentToInput(name, snippet)
+                selectTab(CoworkTab.Chat)
+                localState.update {
+                    it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.files_attached_to_chat, name))
+                }
+            }
+        }
+    }
+
+    fun onFilesNewFolder() {
         viewModelScope.launch {
-            val file = java.io.File(path)
-            if (!file.exists()) return@launch
+            val name = "folder_${System.currentTimeMillis()}"
+            if (guestFileRepository.createDirectory(localState.value.filesPath, name)) {
+                refreshGuestFiles()
+            }
+        }
+    }
+
+    fun onShareArtifact(guestPath: String) {
+        viewModelScope.launch {
+            val file = guestFileRepository.pullToCache(guestPath) ?: return@launch
             val uri = androidx.core.content.FileProvider.getUriForFile(
                 application,
                 "${application.packageName}.fileprovider",
@@ -237,10 +316,10 @@ class HomeViewModel(
         }
     }
 
-    fun onDeleteArtifact(path: String) {
+    fun onDeleteArtifact(guestPath: String) {
         viewModelScope.launch {
-            if (artifactsRepository.delete(path)) {
-                refreshArtifacts()
+            if (guestFileRepository.delete(guestPath)) {
+                refreshGuestFiles()
                 localState.update {
                     it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.files_deleted))
                 }
@@ -250,8 +329,9 @@ class HomeViewModel(
 
     fun onUploadArtifact(uri: Uri, displayName: String?) {
         viewModelScope.launch {
-            val saved = artifactsRepository.importFromUri(application, uri, displayName)
-            refreshArtifacts()
+            val path = localState.value.filesPath
+            val saved = guestFileRepository.uploadFromUri(application, uri, displayName, path)
+            refreshGuestFiles()
             localState.update {
                 it.copy(
                     chatSnackbar = if (saved != null) {
@@ -545,8 +625,8 @@ class HomeViewModel(
 
     fun onAttachArtifact(relativeName: String) {
         viewModelScope.launch {
-            val file = settingsRepository.getArtifactsDir().resolve(relativeName)
-            val (name, snippet) = AttachmentReader.readArtifactFile(file)
+            val guestPath = GuestFileRepository.joinPath(GuestPaths.ARTIFACTS_DIR, relativeName)
+            val (name, snippet) = guestFileRepository.readTextSnippet(guestPath)
             appendAttachmentToInput(name, snippet)
         }
     }
@@ -632,16 +712,25 @@ class HomeViewModel(
 
     fun onScreenshot() {
         viewModelScope.launch {
-            val frame = VncSession.currentFrame()
-            val path = settingsRepository.getArtifactsDir().resolve("screenshot_${System.currentTimeMillis()}.png")
-            val message = if (frame != null) {
-                java.io.FileOutputStream(path).use { out ->
-                    frame.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
-                }
-                refreshArtifacts()
-                "Screenshot saved: ${path.name}"
+            val message = if (TERMUX_STACK_DESKTOP) {
+                DesktopScreenshot.captureToArtifacts(guestShell).fold(
+                    onSuccess = { guestPath ->
+                        refreshGuestFiles()
+                        application.getString(com.proot.cowork.R.string.screenshot_saved_guest, guestPath)
+                    },
+                    onFailure = { err -> err.message ?: "Screenshot failed" },
+                )
             } else {
-                "No VNC frame available yet"
+                val frame = com.proot.cowork.domain.vnc.VncSession.currentFrame()
+                val path = settingsRepository.getArtifactsDir().resolve("screenshot_${System.currentTimeMillis()}.png")
+                if (frame != null) {
+                    java.io.FileOutputStream(path).use { out ->
+                        frame.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    "Screenshot saved: ${path.name}"
+                } else {
+                    "No VNC frame available yet"
+                }
             }
             localState.update {
                 it.copy(
@@ -891,8 +980,7 @@ class HomeViewModel(
 
     fun onOpenFilePath(path: String) {
         viewModelScope.launch {
-            val file = java.io.File(path)
-            val (name, snippet) = AttachmentReader.readArtifactFile(file)
+            val (name, snippet) = guestFileRepository.readTextSnippet(path)
             appendAttachmentToInput(name, snippet)
             localState.update {
                 it.copy(
@@ -903,35 +991,27 @@ class HomeViewModel(
     }
 
     fun onOpenTerminal() {
-        localState.update {
-            it.copy(
-                chatSnackbar = application.getString(com.proot.cowork.R.string.terminal_open_hint),
-            )
-        }
+        selectTab(CoworkTab.Terminal)
     }
 
     fun onOpenBrowser() {
-        localState.update {
-            it.copy(
-                messages = it.messages + AgentMessage(
-                    id = UUID.randomUUID().toString(),
-                    role = MessageRole.SYSTEM,
-                    content = "File browser (Phase 5): artifacts at ${settingsRepository.getArtifactsDir()}",
-                ),
-            )
-        }
+        localState.update { it.copy(filesPath = GuestPaths.ARTIFACTS_DIR) }
+        selectTab(CoworkTab.Files)
     }
 
     fun onOpenSkills() {
-        localState.update {
-            it.copy(
-                messages = it.messages + AgentMessage(
-                    id = UUID.randomUUID().toString(),
-                    role = MessageRole.SYSTEM,
-                    content = "Skills manager (Phase 4): agentskills.io SKILL.md at ${settingsRepository.getSkillsDir()}",
-                ),
-            )
+        selectTab(CoworkTab.Skills)
+    }
+
+    fun onVoiceResult(text: String) {
+        localState.update { state ->
+            val merged = if (state.inputText.isBlank()) text else "${state.inputText.trimEnd()} $text"
+            state.copy(inputText = merged.trim())
         }
+    }
+
+    fun onVoiceError(message: String) {
+        localState.update { it.copy(chatSnackbar = message) }
     }
 
     companion object {

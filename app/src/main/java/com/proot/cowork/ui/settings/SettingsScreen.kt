@@ -53,7 +53,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.proot.cowork.R
+import androidx.compose.ui.platform.LocalContext
 import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.data.proot.ProotGuestShellExecutor
+import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.ui.components.CoworkCard
 import com.proot.cowork.ui.design.CoworkTokens
 
@@ -61,8 +64,15 @@ import com.proot.cowork.ui.design.CoworkTokens
 @Composable
 fun SettingsScreen(
     settingsRepository: SettingsRepository,
+    prootContainerRepository: ProotContainerRepository,
     onNavigateBack: () -> Unit,
-    viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(settingsRepository)),
+    viewModel: SettingsViewModel = viewModel(
+        factory = SettingsViewModel.factory(
+            settingsRepository = settingsRepository,
+            prootContainerRepository = prootContainerRepository,
+            guestShell = ProotGuestShellExecutor(LocalContext.current.applicationContext),
+        ),
+    ),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -76,6 +86,10 @@ fun SettingsScreen(
             snackbarHostState.showSnackbar(it)
             viewModel.clearConnectionTestMessage()
         }
+    }
+
+    LaunchedEffect(uiState.deleteMessage) {
+        uiState.deleteMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearDeleteMessage() }
     }
 
     Scaffold(
@@ -141,15 +155,37 @@ fun SettingsScreen(
             CoworkCard {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Check, null, tint = CoworkTokens.Mint, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.size(8.dp))
-                        Text("Ubuntu", fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
-                        Spacer(Modifier.size(8.dp))
-                        Surface(shape = CoworkTokens.ShapePill, color = CoworkTokens.Mint.copy(alpha = 0.15f)) {
-                            Text(stringResource(R.string.imported_badge), Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = CoworkTokens.Mint, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                        if (uiState.rootfsInstalled) {
+                            Icon(Icons.Default.Check, null, tint = CoworkTokens.Mint, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.size(8.dp))
+                        }
+                        Text(
+                            uiState.distroName.replaceFirstChar { it.uppercase() },
+                            fontWeight = FontWeight.SemiBold,
+                            color = CoworkTokens.TextPrimary,
+                        )
+                        if (uiState.rootfsInstalled) {
+                            Spacer(Modifier.size(8.dp))
+                            Surface(shape = CoworkTokens.ShapePill, color = CoworkTokens.Mint.copy(alpha = 0.15f)) {
+                                Text(
+                                    stringResource(R.string.imported_badge),
+                                    Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    color = CoworkTokens.Mint,
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                                )
+                            }
                         }
                     }
-                    Icon(Icons.Default.Delete, null, tint = CoworkTokens.TextMuted)
+                    IconButton(
+                        onClick = viewModel::deleteRootfs,
+                        enabled = uiState.rootfsInstalled && !uiState.isDeletingRootfs,
+                    ) {
+                        if (uiState.isDeletingRootfs) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = CoworkTokens.Failed)
+                        } else {
+                            Icon(Icons.Default.Delete, stringResource(R.string.settings_delete_rootfs), tint = CoworkTokens.Failed)
+                        }
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(stringResource(R.string.rootfs_meta), color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
@@ -157,20 +193,29 @@ fun SettingsScreen(
                 Text(stringResource(R.string.container_health), color = CoworkTokens.TextSecondary, fontWeight = FontWeight.Medium)
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(CoworkTokens.Mint))
+                        val dotColor = if (uiState.containerRunning) CoworkTokens.Mint else CoworkTokens.TextMuted
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
                         Spacer(Modifier.size(6.dp))
-                        Text(stringResource(R.string.container_running), color = CoworkTokens.Mint, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                        Text(
+                            if (uiState.containerRunning) {
+                                stringResource(R.string.container_running)
+                            } else {
+                                stringResource(R.string.container_stopped)
+                            },
+                            color = dotColor,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                        )
                     }
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HealthTile("CPU", "2.3%", Modifier.weight(1f))
-                    HealthTile("Memory", "156 MB", Modifier.weight(1f))
+                    HealthTile("CPU", uiState.cpuLabel, Modifier.weight(1f))
+                    HealthTile("Memory", uiState.memoryLabel, Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HealthTile("Display", ":0", Modifier.weight(1f))
-                    HealthTile("Uptime", "00:04:23", Modifier.weight(1f))
+                    HealthTile("Display", uiState.displayLabel, Modifier.weight(1f))
+                    HealthTile("Uptime", uiState.uptimeLabel, Modifier.weight(1f))
                 }
             }
 

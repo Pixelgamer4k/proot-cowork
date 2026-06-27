@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="artifacts" path="artifacts/" />
+    <cache-path name="guest_share" path="guest_share/" />
     <files-path name="chat_exports" path="chat/exports/" />
 </paths>

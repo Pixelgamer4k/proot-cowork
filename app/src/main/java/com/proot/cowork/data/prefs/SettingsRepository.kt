@@ -134,5 +134,6 @@ class SettingsRepository(private val context: Context) {
 
     fun getSkillsDir() = context.filesDir.resolve("skills")
 
+    /** Legacy host path (VNC stack). Guest files live at [com.proot.cowork.data.files.GuestPaths.ARTIFACTS_DIR]. */
     fun getArtifactsDir() = context.filesDir.resolve("artifacts").also { it.mkdirs() }
 }

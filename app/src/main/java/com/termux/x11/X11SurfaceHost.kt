@@ -41,9 +41,6 @@ class X11SurfaceHost(context: Context) : FrameLayout(context) {
             if (width > 0 && height > 0) {
                 touchHandler.updateViewSize(width, height)
             }
-            if (desktopInputEnabled) {
-                focusDesktopKeyboard()
-            }
             touchHandler.onTouchEvent(event)
         }
 
@@ -54,11 +51,12 @@ class X11SurfaceHost(context: Context) : FrameLayout(context) {
     fun setDesktopInputEnabled(enabled: Boolean) {
         desktopInputEnabled = enabled
         isClickable = enabled
-        isFocusable = enabled
-        isFocusableInTouchMode = enabled
+        // Keep mouse routing enabled but never steal touch focus — keyboard opens only via icon.
+        isFocusable = false
+        isFocusableInTouchMode = false
         lorieView.isClickable = enabled
         lorieView.isFocusable = enabled
-        lorieView.isFocusableInTouchMode = enabled
+        lorieView.isFocusableInTouchMode = false
         if (!enabled) {
             hideDesktopKeyboard()
             lorieView.clearFocus()

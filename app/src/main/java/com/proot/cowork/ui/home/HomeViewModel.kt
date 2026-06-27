@@ -7,6 +7,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.proot.cowork.data.chat.ChatHistoryStore
 import com.proot.cowork.data.chat.ChatTranscriptExporter
+import com.proot.cowork.data.files.FileBrowserSort
+import com.proot.cowork.data.files.FilesSortOrder
+import com.proot.cowork.data.files.FilesViewMode
 import com.proot.cowork.data.files.GuestFileEntry
 import com.proot.cowork.data.files.GuestFileRepository
 import com.proot.cowork.data.files.GuestPaths
@@ -99,7 +102,10 @@ data class HomeUiState(
     val filesError: String? = null,
     val filesSelectionMode: Boolean = false,
     val filesSelectedPaths: Set<String> = emptySet(),
+    val filesViewMode: FilesViewMode = FilesViewMode.LIST,
+    val filesSortOrder: FilesSortOrder = FilesSortOrder.NAME_ASC,
     val shareArtifactUri: Uri? = null,
+    val shareArtifactUris: List<Uri> = emptyList(),
     val containerInstalled: Boolean = false,
     val selectedTab: CoworkTab = CoworkTab.Chat,
     val composerArtifactNames: List<String> = emptyList(),
@@ -237,18 +243,20 @@ class HomeViewModel(
     }
 
     fun clearShareArtifactUri() {
-        localState.update { it.copy(shareArtifactUri = null) }
+        localState.update { it.copy(shareArtifactUri = null, shareArtifactUris = emptyList()) }
     }
 
     private suspend fun refreshGuestFiles() {
         val path = GuestPaths.normalize(localState.value.filesPath)
         localState.update { it.copy(filesLoading = true, filesError = null, filesPath = path) }
         val result = guestFileRepository.listDirectory(path)
+        val sortOrder = localState.value.filesSortOrder
         localState.update { state ->
             result.fold(
                 onSuccess = { entries ->
+                    val sorted = FileBrowserSort.sorted(entries, sortOrder)
                     state.copy(
-                        guestFiles = entries,
+                        guestFiles = sorted,
                         filesLoading = false,
                         filesError = null,
                         composerArtifactNames = if (path == GuestPaths.ARTIFACTS_DIR) {
@@ -293,13 +301,53 @@ class HomeViewModel(
         if (entry.isDirectory) {
             onFilesNavigateToPath(entry.guestPath)
         } else {
-            viewModelScope.launch {
-                val (name, snippet) = guestFileRepository.readTextSnippet(entry.guestPath)
-                appendAttachmentToInput(name, snippet)
-                selectTab(CoworkTab.Chat)
+            onShareArtifact(entry.guestPath)
+        }
+    }
+
+    fun onFilesViewModeChange(mode: FilesViewMode) {
+        localState.update { it.copy(filesViewMode = mode) }
+    }
+
+    fun onFilesSortOrderChange(order: FilesSortOrder) {
+        localState.update { state ->
+            state.copy(
+                filesSortOrder = order,
+                guestFiles = FileBrowserSort.sorted(state.guestFiles, order),
+            )
+        }
+    }
+
+    fun onFilesRenameSelected(newName: String) {
+        val path = localState.value.filesSelectedPaths.singleOrNull() ?: return
+        viewModelScope.launch {
+            if (guestFileRepository.rename(path, newName)) {
+                onFilesExitSelectionMode()
+                refreshGuestFiles()
+            } else {
                 localState.update {
-                    it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.files_attached_to_chat, name))
+                    it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.files_rename_failed))
                 }
+            }
+        }
+    }
+
+    fun onFilesDownloadSelected() {
+        viewModelScope.launch {
+            val paths = localState.value.filesSelectedPaths.filter { path ->
+                localState.value.guestFiles.any { it.guestPath == path && !it.isDirectory }
+            }
+            if (paths.isEmpty()) {
+                localState.update { it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.files_download_none)) }
+                return@launch
+            }
+            var saved = 0
+            paths.forEach { path ->
+                if (guestFileRepository.downloadToDevice(path) != null) saved++
+            }
+            onFilesExitSelectionMode()
+            localState.update {
+                it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.files_downloaded_count, saved))
             }
         }
     }
@@ -324,8 +372,24 @@ class HomeViewModel(
     }
 
     fun onFilesShareSelected() {
-        val path = localState.value.filesSelectedPaths.firstOrNull() ?: return
-        onShareArtifact(path)
+        viewModelScope.launch {
+            val paths = localState.value.filesSelectedPaths.toList()
+            if (paths.isEmpty()) return@launch
+            if (paths.size == 1) {
+                onShareArtifact(paths.first())
+                return@launch
+            }
+            val files = guestFileRepository.pullManyToCache(paths)
+            if (files.isEmpty()) return@launch
+            val uris = files.map { file ->
+                androidx.core.content.FileProvider.getUriForFile(
+                    application,
+                    "${application.packageName}.fileprovider",
+                    file,
+                )
+            }
+            localState.update { it.copy(shareArtifactUris = uris) }
+        }
     }
 
     fun onFilesDeleteSelected() {

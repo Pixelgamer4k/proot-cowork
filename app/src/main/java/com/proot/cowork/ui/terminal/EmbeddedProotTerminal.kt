@@ -24,14 +24,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.proot.cowork.R
 import com.proot.cowork.domain.desktop.TermuxStackSession
+import com.proot.cowork.termux.terminal.CoworkTerminalView
 import com.proot.cowork.termux.terminal.CoworkTerminalViewClient
 import com.proot.cowork.termux.terminal.ProotGuestTerminalController
-import com.proot.cowork.termux.terminal.TerminalKeyboard
 import com.proot.cowork.ui.design.CoworkTokens
-import com.termux.view.TerminalView
 
 private class TerminalSurfaceHolder {
-    var terminalView: TerminalView? = null
+    var terminalView: CoworkTerminalView? = null
     var viewClient: CoworkTerminalViewClient? = null
 }
 
@@ -66,9 +65,7 @@ fun EmbeddedProotTerminal(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .imePadding(),
+        modifier = modifier.fillMaxSize(),
     ) {
         if (!sessionRunning && barEpoch > 0) {
             Box(
@@ -101,7 +98,7 @@ fun EmbeddedProotTerminal(
                 .weight(1f)
                 .fillMaxWidth(),
             factory = { ctx ->
-                TerminalView(ctx, null).apply {
+                CoworkTerminalView(ctx, null).apply {
                     setBackgroundColor(Color.parseColor("#0D0D0D"))
                     val client = CoworkTerminalViewClient(this)
                     setTerminalViewClient(client)
@@ -127,7 +124,7 @@ fun EmbeddedProotTerminal(
                         ProotGuestTerminalController.ensureAttached(tv, context, holder.viewClient)
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().imePadding(),
             )
         }
     }

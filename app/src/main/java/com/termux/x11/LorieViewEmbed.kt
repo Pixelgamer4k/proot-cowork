@@ -60,7 +60,7 @@ object LorieViewEmbed {
 
     private fun applyEmbedSetup(lorieView: LorieView) {
         lorieView.isFocusable = true
-        lorieView.isFocusableInTouchMode = true
+        lorieView.isFocusableInTouchMode = false
         lorieView.requestFocus()
         lorieView.background = object : ColorDrawable(Color.TRANSPARENT) {
             override fun isStateful(): Boolean = true

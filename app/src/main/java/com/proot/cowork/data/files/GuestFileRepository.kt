@@ -2,6 +2,7 @@ package com.proot.cowork.data.files
 
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import android.util.Base64
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.proot.ProotGuestShellExecutor
@@ -121,6 +122,32 @@ print(json.dumps(entries))
         val cmd = "mkdir -p -- $quotedDir && printf '%s' '$b64' | base64 -d > $quotedDest"
         val result = shell.run(cmd)
         if (result.success) destPath else null
+    }
+
+    suspend fun rename(guestPath: String, newName: String): Boolean = withContext(Dispatchers.IO) {
+        val safeName = newName.trim().replace(Regex("""[^\w.\- ]+"""), "_").take(120)
+        if (safeName.isBlank()) return@withContext false
+        val parent = parentPath(guestPath) ?: return@withContext false
+        val target = joinPath(parent, safeName)
+        if (!GuestPaths.isAllowed(guestPath) || !GuestPaths.isAllowed(target)) return@withContext false
+        val quotedFrom = shellQuote(guestPath)
+        val quotedTo = shellQuote(target)
+        shell.run("mv -- $quotedFrom $quotedTo").success
+    }
+
+    suspend fun downloadToDevice(guestPath: String): File? = withContext(Dispatchers.IO) {
+        val cached = pullToCache(guestPath) ?: return@withContext null
+        val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        downloads.mkdirs()
+        val dest = File(downloads, cached.name)
+        runCatching {
+            cached.copyTo(dest, overwrite = true)
+            dest
+        }.getOrNull()
+    }
+
+    suspend fun pullManyToCache(guestPaths: List<String>): List<File> = withContext(Dispatchers.IO) {
+        guestPaths.mapNotNull { pullToCache(it) }
     }
 
     suspend fun pullToCache(guestPath: String): File? = withContext(Dispatchers.IO) {

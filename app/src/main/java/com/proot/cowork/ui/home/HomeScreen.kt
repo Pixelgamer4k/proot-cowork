@@ -109,12 +109,26 @@ fun HomeScreen(
         onDispose { voiceHelper?.stop() }
     }
 
-    LaunchedEffect(uiState.shareArtifactUri) {
-        val uri = uiState.shareArtifactUri ?: return@LaunchedEffect
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "*/*"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    LaunchedEffect(uiState.shareArtifactUri, uiState.shareArtifactUris) {
+        val multi = uiState.shareArtifactUris
+        val single = uiState.shareArtifactUri
+        if (multi.isEmpty() && single == null) return@LaunchedEffect
+        val intent = when {
+            multi.size > 1 -> Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "*/*"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(multi))
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            multi.size == 1 -> Intent(Intent.ACTION_SEND).apply {
+                type = "*/*"
+                putExtra(Intent.EXTRA_STREAM, multi.first())
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            else -> Intent(Intent.ACTION_SEND).apply {
+                type = "*/*"
+                putExtra(Intent.EXTRA_STREAM, single)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
         }
         shareContext.startActivity(Intent.createChooser(intent, shareContext.getString(com.proot.cowork.R.string.files_share)))
         viewModel.clearShareArtifactUri()
@@ -252,6 +266,8 @@ fun HomeScreen(
                         currentPath = uiState.filesPath,
                         isLoading = uiState.filesLoading,
                         error = uiState.filesError,
+                        viewMode = uiState.filesViewMode,
+                        sortOrder = uiState.filesSortOrder,
                         containerInstalled = uiState.containerInstalled,
                         selectionMode = uiState.filesSelectionMode,
                         selectedPaths = uiState.filesSelectedPaths,
@@ -262,9 +278,13 @@ fun HomeScreen(
                         onEnterSelectionMode = viewModel::onFilesEnterSelectionMode,
                         onExitSelectionMode = viewModel::onFilesExitSelectionMode,
                         onShareSelected = viewModel::onFilesShareSelected,
+                        onDownloadSelected = viewModel::onFilesDownloadSelected,
                         onDeleteSelected = viewModel::onFilesDeleteSelected,
+                        onRenameSelected = viewModel::onFilesRenameSelected,
                         onUpload = { fileUploadLauncher.launch(arrayOf("*/*")) },
                         onCreateFolder = viewModel::onFilesCreateFolder,
+                        onViewModeChange = viewModel::onFilesViewModeChange,
+                        onSortOrderChange = viewModel::onFilesSortOrderChange,
                     )
                     CoworkTab.Terminal -> TerminalTabContent(
                         containerInstalled = uiState.containerInstalled,

@@ -41,7 +41,8 @@ class CoworkTerminalViewClient(
         TerminalKeyboard.focusAndShow(terminalView)
     }
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
-    override fun shouldEnforceCharBasedInput(): Boolean = true
+    // TYPE_NULL avoids keyboards that buffer composing text until IME dismiss.
+    override fun shouldEnforceCharBasedInput(): Boolean = false
     override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
     override fun isTerminalViewSelected(): Boolean = true
     override fun copyModeChanged(copyMode: Boolean) {}
@@ -70,7 +71,8 @@ class CoworkTerminalSessionClient(
     private val onFinished: (() -> Unit)? = null,
 ) : TerminalSessionClient {
     override fun onTextChanged(changedSession: TerminalSession) {
-        terminalView.post { terminalView.onScreenUpdated() }
+        terminalView.onScreenUpdated()
+        terminalView.invalidate()
     }
     override fun onTitleChanged(updatedSession: TerminalSession) {}
     override fun onSessionFinished(finishedSession: TerminalSession) {

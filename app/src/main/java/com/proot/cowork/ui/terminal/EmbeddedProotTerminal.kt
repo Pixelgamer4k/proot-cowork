@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,12 +23,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
 import com.proot.cowork.R
 import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.termux.terminal.CoworkTerminalViewClient
 import com.proot.cowork.termux.terminal.ProotGuestTerminalController
+import com.proot.cowork.termux.terminal.TerminalKeyboard
 import com.proot.cowork.ui.design.CoworkTokens
 import com.termux.view.TerminalView
+import com.termux.x11.X11SurfaceHostRegistry
 
 private class TerminalSurfaceHolder {
     var terminalView: TerminalView? = null
@@ -57,8 +61,16 @@ fun EmbeddedProotTerminal(
         return
     }
 
+    DisposableEffect(isActive) {
+        if (isActive) {
+            X11SurfaceHostRegistry.current?.hideDesktopKeyboard()
+        }
+        onDispose { }
+    }
+
     LaunchedEffect(isActive, x11Ready, barEpoch) {
         if (!isActive) return@LaunchedEffect
+        X11SurfaceHostRegistry.current?.hideDesktopKeyboard()
         val view = holder.terminalView ?: return@LaunchedEffect
         ProotGuestTerminalController.ensureAttached(view, context, holder.viewClient)
         ProotGuestTerminalController.restoreFocus(view)
@@ -100,15 +112,26 @@ fun EmbeddedProotTerminal(
             factory = { ctx ->
                 TerminalView(ctx, null).apply {
                     setBackgroundColor(Color.parseColor("#0D0D0D"))
+                    TerminalKeyboard.setupOnce(this)
                     val client = CoworkTerminalViewClient(this)
                     setTerminalViewClient(client)
                     holder.terminalView = this
                     holder.viewClient = client
                     barEpoch++
+                    ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
+                        v.post {
+                            (v as? TerminalView)?.onScreenUpdated()
+                            v.invalidate()
+                        }
+                        insets
+                    }
                     ProotGuestTerminalController.ensureAttached(this, context, client)
                 }
             },
             update = { view ->
+                if (isActive) {
+                    X11SurfaceHostRegistry.current?.hideDesktopKeyboard()
+                }
                 if (!ProotGuestTerminalController.isSessionRunning()) {
                     ProotGuestTerminalController.ensureAttached(view, context, holder.viewClient)
                 }

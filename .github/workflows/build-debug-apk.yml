@@ -43,7 +43,7 @@ jobs:
         run: grep -q COWORK_TRIGGER_CALLBACK_NULL third_party/termux-x11/app/src/main/java/com/termux/x11/LorieView.java
 
       - name: Verify terminal-view live-compose patch
-        run: grep -q COWORK_LIVE_COMPOSE_COMMIT third_party/termux-app/terminal-view/src/main/java/com/termux/view/TerminalView.java
+        run: grep -q COWORK_LIVE_COMPOSE_V2 third_party/termux-app/terminal-view/src/main/java/com/termux/view/TerminalView.java
 
       - name: Fetch UserLAnd runtime
         run: bash scripts/fetch-userland-runtime.sh

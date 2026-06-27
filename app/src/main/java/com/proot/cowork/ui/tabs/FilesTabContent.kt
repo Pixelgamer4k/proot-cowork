@@ -215,5 +215,5 @@ private fun GuestFileRow(
 
 private fun breadcrumbLabel(path: String): String {
     val relative = path.removePrefix(GuestPaths.HOME).trimStart('/')
-    return if (relative.isBlank()) "~" else "~ / ${relative.replace('/', ' / ')}"
+    return if (relative.isBlank()) "~" else "~ / ${relative.replace("/", " / ")}"
 }

@@ -11,8 +11,8 @@ object TerminalKeyboard {
     private val setupMarker = Any()
 
     fun setupOnce(terminalView: TerminalView) {
-        if (terminalView.getTag(setupMarker) === setupMarker) return
-        terminalView.setTag(setupMarker, setupMarker)
+        if (terminalView.tag === setupMarker) return
+        terminalView.tag = setupMarker
         setup(terminalView)
     }
 

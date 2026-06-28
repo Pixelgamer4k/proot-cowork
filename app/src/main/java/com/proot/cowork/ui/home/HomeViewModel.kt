@@ -21,6 +21,7 @@ import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.ImportResult
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.domain.agent.AgentFeatureFlags
+import com.proot.cowork.domain.agent.AgentExecutionSession
 import com.proot.cowork.domain.agent.AgentExecutionSnapshot
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.CoworkAgentRunner

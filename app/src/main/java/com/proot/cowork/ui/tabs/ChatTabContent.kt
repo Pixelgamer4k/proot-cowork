@@ -400,7 +400,8 @@ private fun KimiTurnBlock(
                 ShellCommandLogCard(entries = shellCommandLog, expandedByDefault = true)
             }
 
-            turn.assistant?.let { assistant ->
+            if (turn.assistant != null) {
+                val assistant = turn.assistant
                 val streaming = isExecuting &&
                     assistant.content.isBlank() &&
                     turn.tools.any { it.toolStatus == ToolCallStatus.RUNNING }
@@ -410,7 +411,7 @@ private fun KimiTurnBlock(
                     onCopy = onMessageCopied,
                     onRegenerate = { onRegenerateFrom(assistant.id) },
                 )
-            } ?: if (isExecuting && isActiveTurn) {
+            } else if (isExecuting && isActiveTurn) {
                 KimiAssistantBlock(
                     content = "",
                     isStreaming = true,

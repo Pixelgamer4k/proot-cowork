@@ -9,14 +9,22 @@ object TaskClassifier {
         Regex("""^(what is|how much is)\s+[\d\s\+\-\*/\(\)\.]+[?\s]*$""", RegexOption.IGNORE_CASE),
     )
 
+    /** Single deliverable file tasks — MODERATE pipeline, not COMPLEX swarm. */
+    private val moderateDeliverablePatterns = listOf(
+        Regex("""summary\.md""", RegexOption.IGNORE_CASE),
+        Regex("""write\s+\w[\w.-]*\.md""", RegexOption.IGNORE_CASE),
+        Regex("""write\s+.*\s+to\s+output""", RegexOption.IGNORE_CASE),
+    )
+
     private val complexKeywords = listOf(
-        "report", "research", "analyze", "analysis", "comprehensive", "detailed study",
+        "comprehensive report", "detailed study", "deep research", "full report",
         "build a project", "full stack", "multi-step", "swarm", "architecture",
+        "market analysis", "parallel", "multi-angle",
     )
 
     private val moderateKeywords = listOf(
-        "write a", "create a", "install", "setup", "set up", "configure", "deploy",
-        "summary", "document", "script", "nginx", "database", "download",
+        "write a", "create a", "research", "install", "setup", "set up", "configure", "deploy",
+        "summary", "document", "script", "nginx", "database", "download", "report", "analyze",
     )
 
     private val actionVerbs = listOf(
@@ -35,6 +43,17 @@ object TaskClassifier {
                 text,
                 emptyList(),
                 "Short factual or greeting query",
+            )
+        }
+
+        if (moderateDeliverablePatterns.any { it.containsMatchIn(text) } &&
+            !complexKeywords.any { lower.contains(it) }
+        ) {
+            return classification(
+                TaskComplexity.MODERATE,
+                text,
+                listOf(ExecutionStage.RESEARCH, ExecutionStage.EXECUTE, ExecutionStage.INTEGRATE),
+                "Research plus single deliverable file",
             )
         }
 
@@ -57,12 +76,7 @@ object TaskClassifier {
             return classification(
                 TaskComplexity.MODERATE,
                 text,
-                listOf(
-                    ExecutionStage.RESEARCH,
-                    ExecutionStage.EXECUTE,
-                    ExecutionStage.VALIDATE,
-                    ExecutionStage.INTEGRATE,
-                ),
+                listOf(ExecutionStage.RESEARCH, ExecutionStage.EXECUTE, ExecutionStage.INTEGRATE),
                 "Multi-step action task",
             )
         }

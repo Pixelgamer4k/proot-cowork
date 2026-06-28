@@ -21,6 +21,12 @@ data class ToolInvocation(
 )
 
 class AgentToolRegistry(context: Context) {
+    enum class ToolFilter {
+        FULL,
+        RESEARCH,
+        WRITE,
+    }
+
     private val appContext = context.applicationContext
     private val shell = ProotGuestShellExecutor(context)
     private val skills = SkillRepository(context)
@@ -38,7 +44,14 @@ class AgentToolRegistry(context: Context) {
         FileSystemTool.NAME_EDIT -> FileSystemTool.edit(shell, invocation.arguments)
         TodoTools.NAME_WRITE -> TodoTools.write(todos, invocation.arguments)
         TodoTools.NAME_READ -> TodoTools.read(todos)
-        WebTool.NAME -> WebTool.execute(shell, http, invocation.arguments)
+        WebTool.NAME -> {
+            if (AgentRunContext.webFetchCount >= AgentRunContext.MAX_WEB_FETCH_PER_RUN) {
+                return "Error: web_fetch limit (${AgentRunContext.MAX_WEB_FETCH_PER_RUN}) reached. " +
+                    "Use gathered notes and write the deliverable file."
+            }
+            AgentRunContext.webFetchCount++
+            WebTool.execute(shell, http, invocation.arguments)
+        }
         CodeTool.NAME -> CodeTool.execute(shell, invocation.arguments)
         SkillTools.NAME_LIST -> SkillTools.list(skills, invocation.arguments)
         SkillTools.NAME_VIEW -> SkillTools.view(skills, invocation.arguments)
@@ -65,9 +78,28 @@ class AgentToolRegistry(context: Context) {
         put(SlackTool.definition())
     }
 
-    fun toolsForAgent(agent: com.proot.cowork.domain.agent.SwarmAgentType): org.json.JSONArray {
-        val all = openAiToolDefinitions()
-        val allowed = when (agent) {
+    fun toolsForAgent(
+        agent: com.proot.cowork.domain.agent.SwarmAgentType,
+        filter: ToolFilter = ToolFilter.FULL,
+    ): org.json.JSONArray {
+        val allowed = when (filter) {
+            ToolFilter.RESEARCH -> setOf(
+                WebTool.NAME,
+                FileSystemTool.NAME_READ,
+                SkillTools.NAME_LIST,
+                SkillTools.NAME_VIEW,
+            )
+            ToolFilter.WRITE -> setOf(
+                FileSystemTool.NAME_READ,
+                FileSystemTool.NAME_WRITE,
+                FileSystemTool.NAME_EDIT,
+            )
+            ToolFilter.FULL -> agentToolNames(agent)
+        }
+        return filterDefinitions(allowed)
+    }
+
+    private fun agentToolNames(agent: com.proot.cowork.domain.agent.SwarmAgentType): Set<String> = when (agent) {
             com.proot.cowork.domain.agent.SwarmAgentType.Planner ->
                 setOf(FileSystemTool.NAME_READ, SkillTools.NAME_LIST, SkillTools.NAME_VIEW)
             com.proot.cowork.domain.agent.SwarmAgentType.Researcher ->
@@ -88,7 +120,10 @@ class AgentToolRegistry(context: Context) {
                 setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, SkillTools.NAME_LIST, SkillTools.NAME_VIEW)
             com.proot.cowork.domain.agent.SwarmAgentType.Slack ->
                 setOf(SlackTool.NAME, ProotShellTool.NAME, SkillTools.NAME_LIST)
-        }
+    }
+
+    private fun filterDefinitions(allowed: Set<String>): org.json.JSONArray {
+        val all = openAiToolDefinitions()
         return org.json.JSONArray().apply {
             for (i in 0 until all.length()) {
                 val tool = all.getJSONObject(i)

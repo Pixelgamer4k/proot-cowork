@@ -9,6 +9,7 @@ import com.proot.cowork.data.files.GuestPaths
 import com.proot.cowork.data.proot.ProotGuestShellExecutor
 import com.proot.cowork.data.skills.SkillRepository
 import com.proot.cowork.domain.agent.orchestration.ExecutionStage
+import com.proot.cowork.domain.agent.orchestration.ModerateTaskRunner
 import com.proot.cowork.domain.agent.orchestration.PlanWriter
 import com.proot.cowork.domain.agent.orchestration.StageValidator
 import com.proot.cowork.domain.agent.orchestration.SystemPromptBuilder
@@ -90,7 +91,10 @@ class CoworkAgentRunner(private val context: Context) {
 
         if (classification.complexity.requiresPlan()) {
             planWriter.writePlan(classification)
-            onSystemNotice("Execution plan saved to ${GuestPaths.planFilePath()}")
+            onSystemNotice(
+                "Execution plan saved to ${GuestPaths.planFilePath()} " +
+                    "(${classification.complexity.name}: ${classification.rationale})",
+            )
         }
 
         val system = SystemPromptBuilder.build(
@@ -101,8 +105,8 @@ class CoworkAgentRunner(private val context: Context) {
 
         val toolPolicy = if (classification.complexity.isToolFree()) ToolPolicy.NONE else ToolPolicy.FULL
 
-        return if (classification.complexity.requiresStagedExecution()) {
-            runStagedFast(
+        return when {
+            classification.complexity.requiresStagedExecution() -> runStagedFast(
                 config = config,
                 classification = classification,
                 systemPrompt = system,
@@ -112,26 +116,54 @@ class CoworkAgentRunner(private val context: Context) {
                 onAssistantDelta = onAssistantDelta,
                 onToolEvent = onToolEvent,
             )
-        } else {
-            val taskMessage = if (classification.complexity.requiresPlan()) {
-                moderateTaskMessage(userTask)
-            } else {
-                userTask
+            classification.complexity == TaskComplexity.MODERATE -> {
+                ModerateTaskRunner(shell, tools, moderateToolLoop()).run(
+                    config = config,
+                    systemPrompt = system,
+                    history = history,
+                    userTask = userTask,
+                    classification = classification,
+                    isActive = isActive,
+                    onAssistantDelta = onAssistantDelta,
+                    onToolEvent = onToolEvent,
+                )
             }
-            runToolLoop(
-                config = config,
-                agent = SwarmAgentType.Executor,
-                systemPrompt = system,
-                history = history,
-                userMessage = taskMessage,
-                isActive = isActive,
-                onAssistantDelta = onAssistantDelta,
-                onToolEvent = onToolEvent,
-                toolPolicy = toolPolicy,
-                maxRounds = if (toolPolicy == ToolPolicy.NONE) 1 else null,
-                temperatureOverride = if (toolPolicy == ToolPolicy.NONE) 0.1 else null,
-            )
+            else -> {
+                val taskMessage = if (classification.complexity.requiresPlan()) {
+                    moderateTaskMessage(userTask)
+                } else {
+                    userTask
+                }
+                runToolLoop(
+                    config = config,
+                    agent = SwarmAgentType.Executor,
+                    systemPrompt = system,
+                    history = history,
+                    userMessage = taskMessage,
+                    isActive = isActive,
+                    onAssistantDelta = onAssistantDelta,
+                    onToolEvent = onToolEvent,
+                    toolPolicy = toolPolicy,
+                    maxRounds = if (toolPolicy == ToolPolicy.NONE) 1 else null,
+                    temperatureOverride = if (toolPolicy == ToolPolicy.NONE) 0.1 else null,
+                )
+            }
         }
+    }
+
+    private fun moderateToolLoop(): ToolLoopRunner = ToolLoopRunner { config, agent, systemPrompt, history, userMessage, isActive, onAssistantDelta, onToolEvent, toolFilter, maxRounds ->
+        runToolLoop(
+            config = config,
+            agent = agent,
+            systemPrompt = systemPrompt,
+            history = history,
+            userMessage = userMessage,
+            isActive = isActive,
+            onAssistantDelta = onAssistantDelta,
+            onToolEvent = onToolEvent,
+            toolFilter = toolFilter,
+            maxRounds = maxRounds,
+        )
     }
 
     private fun moderateTaskMessage(userTask: String): String = buildString {
@@ -387,12 +419,13 @@ class CoworkAgentRunner(private val context: Context) {
         subtaskId: String? = null,
         maxRounds: Int? = null,
         toolPolicy: ToolPolicy = ToolPolicy.FULL,
+        toolFilter: AgentToolRegistry.ToolFilter = AgentToolRegistry.ToolFilter.FULL,
         temperatureOverride: Double? = null,
     ): String {
         val apiMessages = OpenAiCompatibleLlmClient.buildMessagesArray(systemPrompt, history, userMessage)
         val agentTools = when (toolPolicy) {
             ToolPolicy.NONE -> null
-            ToolPolicy.FULL -> tools.toolsForAgent(agent).takeIf { it.length() > 0 }
+            ToolPolicy.FULL -> tools.toolsForAgent(agent, toolFilter).takeIf { it.length() > 0 }
         }
         var lastContent = ""
         val budgetLeft = remainingToolCalls()

@@ -69,16 +69,16 @@ object LongcatToolCallParser {
         val firstTag = block.indexOf('<')
         val header = if (firstTag < 0) block else block.substring(0, firstTag).trim()
         val kvSection = if (firstTag < 0) "" else block.substring(firstTag)
-        val name = normalizeToolName(header.lines().firstOrNull().orEmpty().trim())
-            .ifBlank { inferToolName(argsJson) }
-        if (name.isBlank()) return null
-
         val argsJson = JSONObject()
         kvRegex.findAll(kvSection).forEach { match ->
             val key = match.groupValues[1].trim()
             val value = match.groupValues[2].trim()
             if (key.isNotBlank()) argsJson.put(key, coerceArgValue(value))
         }
+
+        val name = normalizeToolName(header.lines().firstOrNull().orEmpty().trim())
+            .ifBlank { inferToolName(argsJson) }
+        if (name.isBlank()) return null
 
         return LlmToolCall(
             id = "longcat_${UUID.randomUUID()}",

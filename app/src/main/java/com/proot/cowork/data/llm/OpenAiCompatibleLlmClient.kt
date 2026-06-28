@@ -126,6 +126,7 @@ object OpenAiCompatibleLlmClient {
         }
         val request = buildRequest(endpoint, config.apiKey, payload.toString())
         val contentBuffer = StringBuilder()
+        val displayFilter = LongcatStreamDisplayFilter(onDelta)
         val toolBuilders = linkedMapOf<Int, StreamingToolCallBuilder>()
         var finishReason: String? = null
         http.newCall(request).execute().use { response ->
@@ -149,7 +150,7 @@ object OpenAiCompatibleLlmClient {
                 val content = delta.safeOptString("content")
                 if (content.isNotEmpty()) {
                     contentBuffer.append(content)
-                    onDelta(content)
+                    displayFilter.onChunk(content)
                 }
                 delta.optJSONArray("tool_calls")?.let { arr ->
                     for (i in 0 until arr.length()) {
@@ -167,7 +168,8 @@ object OpenAiCompatibleLlmClient {
                 }
             }
         }
-        val toolCalls = toolBuilders.toSortedMap().values.mapNotNull { builder ->
+        displayFilter.finish()
+        val standardToolCalls = toolBuilders.toSortedMap().values.mapNotNull { builder ->
             if (builder.name.isBlank()) return@mapNotNull null
             LlmToolCall(
                 id = builder.id.ifBlank { "call_${builder.name}" },
@@ -175,7 +177,14 @@ object OpenAiCompatibleLlmClient {
                 arguments = builder.arguments.toString().ifBlank { "{}" },
             )
         }
-        LlmCompletionResult(contentBuffer.toString(), toolCalls, finishReason)
+        val longcatParsed = LongcatToolCallParser.parse(contentBuffer.toString())
+        val toolCalls = if (standardToolCalls.isNotEmpty()) standardToolCalls else longcatParsed.toolCalls
+        val visibleContent = if (longcatParsed.toolCalls.isNotEmpty()) {
+            longcatParsed.content
+        } else {
+            contentBuffer.toString()
+        }
+        LlmCompletionResult(visibleContent, toolCalls, finishReason)
     }
 
     private class StreamingToolCallBuilder {
@@ -289,7 +298,10 @@ object OpenAiCompatibleLlmClient {
                 )
             }
         }.orEmpty()
-        return LlmCompletionResult(content, toolCalls, finish)
+        val longcatParsed = LongcatToolCallParser.parse(content)
+        val mergedCalls = if (toolCalls.isNotEmpty()) toolCalls else longcatParsed.toolCalls
+        val visibleContent = if (longcatParsed.toolCalls.isNotEmpty()) longcatParsed.content else content
+        return LlmCompletionResult(visibleContent, mergedCalls, finish)
     }
 
     private fun buildRequest(endpoint: ResolvedLlmEndpoint, apiKey: String, payload: String): Request {

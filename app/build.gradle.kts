@@ -12,7 +12,7 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionName = "0.23.4-moderate-pipeline"
+        versionName = "0.23.5-longcat-tools"
         versionCode = 78
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

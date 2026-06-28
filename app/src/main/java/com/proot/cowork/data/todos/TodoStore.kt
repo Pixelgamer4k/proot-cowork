@@ -67,9 +67,22 @@ class TodoStore(private val context: Context) {
 
     suspend fun writeTodos(threadId: String, incoming: List<TodoItem>): String {
         AgentRunContext.todosInitialized = true
-        val normalized = normalizeStatuses(incoming)
+        val existing = load(threadId)
+        val merged = mergeTodos(existing, incoming)
+        val normalized = normalizeStatuses(merged)
         save(threadId, normalized)
         return formatTodos(normalized)
+    }
+
+    private fun mergeTodos(existing: List<TodoItem>, incoming: List<TodoItem>): List<TodoItem> {
+        if (existing.isEmpty() || incoming.size > 1) return incoming
+        val single = incoming.first()
+        val byId = existing.associateBy { it.id }.toMutableMap()
+        if (single.id in byId) {
+            byId[single.id] = single
+            return existing.map { byId[it.id] ?: it }
+        }
+        return existing + single
     }
 
     suspend fun readTodos(threadId: String): String {
@@ -119,16 +132,32 @@ class TodoStore(private val context: Context) {
 
     companion object {
         fun parseTodosFromJson(args: org.json.JSONObject): List<TodoItem> {
-            val arr = args.optJSONArray("todos") ?: return emptyList()
-            return (0 until arr.length()).mapNotNull { i ->
-                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
-                TodoItem(
-                    id = obj.optString("id").ifBlank { "${i + 1}" },
-                    content = obj.optString("content", "Task ${i + 1}"),
-                    status = TodoStatus.fromString(obj.optString("status", "pending")),
-                    priority = obj.optString("priority", "medium"),
+            val arr = args.optJSONArray("todos") ?: run {
+                val raw = args.optString("todos")
+                if (raw.startsWith("[")) runCatching { JSONArray(raw) }.getOrNull() else null
+            }
+            if (arr != null && arr.length() > 0) {
+                return (0 until arr.length()).mapNotNull { i ->
+                    val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                    TodoItem(
+                        id = obj.optString("id").ifBlank { obj.optString("todo_id").ifBlank { "${i + 1}" } },
+                        content = obj.optString("content").ifBlank { obj.optString("description", "Task ${i + 1}") },
+                        status = TodoStatus.fromString(obj.optString("status", "pending")),
+                        priority = obj.optString("priority", "medium"),
+                    )
+                }
+            }
+            if (args.has("description") || args.has("content") || args.has("todo_id") || args.has("id")) {
+                return listOf(
+                    TodoItem(
+                        id = args.optString("id").ifBlank { args.optString("todo_id", "1") },
+                        content = args.optString("content").ifBlank { args.optString("description", "Task 1") },
+                        status = TodoStatus.fromString(args.optString("status", "pending")),
+                        priority = args.optString("priority", "medium"),
+                    ),
                 )
             }
+            return emptyList()
         }
     }
 }
